@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sensor Telemetry Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a14; color: #eee; min-height: 100vh; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 16px; }
+    h1 { color: #00d9ff; margin-bottom: 16px; font-size: 1.4rem; }
+    .top-bar { display: grid; grid-template-columns: 320px 1fr auto; gap: 12px; margin-bottom: 16px; align-items: start; }
+    .card { background: #12122a; border-radius: 8px; padding: 14px; }
+    .card h2 { color: #00d9ff; margin-bottom: 10px; font-size: 0.95rem; }
+    label { display: block; margin-bottom: 4px; color: #888; font-size: 0.85rem; }
+    input, select { width: 100%; padding: 8px; border: 1px solid #2a2a4a; border-radius: 4px; background: #0a0a14; color: #eee; margin-bottom: 10px; font-size: 0.85rem; }
+    button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px; margin-bottom: 8px; font-size: 0.85rem; }
+    .btn-primary { background: #00d9ff; color: #000; }
+    .btn-danger { background: #ff4757; color: #fff; }
+    .btn-success { background: #2ed573; color: #000; }
+    .btn-small { padding: 4px 8px; font-size: 0.75rem; }
+    .btn-ghost { background: #2a2a4a; color: #aaa; }
+    .status { padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.85rem; }
+    .status.connected { background: #2ed57322; color: #2ed573; }
+    .status.disconnected { background: #ff475722; color: #ff4757; }
+    .subscriptions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sub-tag { background: #00d9ff22; color: #00d9ff; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
+    .sub-tag button { padding: 1px 5px; margin: 0; font-size: 0.75rem; }
+    .log { background: #0a0a14; border-radius: 4px; padding: 8px; height: 120px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
+    .log-entry.error { color: #ff4757; }
+    .log-entry.success { color: #2ed573; }
+    .log-entry .time { color: #555; }
+    .scope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 12px; margin-top: 16px; }
+    .scope-panel { background: #0d0d1f; border-radius: 8px; padding: 12px; border: 1px solid #1e1e3a; }
+    .scope-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .scope-title { color: #00d9ff; font-size: 0.9rem; font-weight: 600; }
+    .scope-meta { color: #555; font-size: 0.75rem; }
+    .scope-stats { color: #888; font-size: 0.75rem; margin-bottom: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+    canvas.scope { width: 100%; height: 160px; display: block; background: #050510; border-radius: 4px; border: 1px solid #1a1a2e; }
+    .scope-latest { color: #2ed573; font-size: 0.8rem; margin-top: 4px; font-family: monospace; }
+    .spi-panel { background: #0d0d1f; border-radius: 8px; padding: 12px; border: 1px solid #1e1e3a; }
+    .spi-log { background: #0a0a14; border-radius: 4px; padding: 8px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; margin-top: 6px; }
+    .spi-entry { padding: 2px 0; border-bottom: 1px solid #1a1a2e; white-space: nowrap; }
+    .spi-entry.spi-read  { color: #a29bfe; }
+    .spi-entry.spi-write { color: #fd79a8; }
+    .spi-entry .time { color: #555; }
+    .topics-panel { margin-top: 16px; }
+    .topic-item { background: #0a0a14; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .topic-item .info { flex: 1; }
+    .topic-item .topic { color: #00d9ff; font-family: monospace; font-size: 0.8rem; }
+    .topic-item .details { color: #555; font-size: 0.72rem; margin-top: 2px; }
+    .topic-item.active { border-left: 3px solid #2ed573; }
+    .pattern-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pattern-tag { background: #2ed57322; color: #2ed573; padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; font-family: monospace; cursor: pointer; }
+    .pattern-tag:hover { background: #2ed57344; }
+    .filters { display: flex; gap: 8px; margin-bottom: 10px; }
+    .filters select { margin-bottom: 0; flex: 1; }
+    .topic-count { background: #00d9ff22; color: #00d9ff; border-radius: 10px; padding: 1px 7px; font-size: 0.72rem; margin-left: 6px; }
+    .empty-scope { color: #333; text-align: center; padding: 40px; font-size: 0.85rem; grid-column: 1/-1; }
+    .type-badge { padding: 1px 6px; border-radius: 3px; font-size: 0.72rem; font-family: monospace; font-weight: 600; margin-left: 4px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>📡 Sensor Telemetry Dashboard</h1>
+  <div style="margin-bottom: 16px;">
+    <a href="sensor-metrics.html" style="color: #00d9ff; text-decoration: none; padding: 8px 12px; border-radius: 4px; background: #12122a; display: inline-block;">
+      📊 View Service Metrics
+    </a>
+  </div>
+  <div class="top-bar">
+    <div class="card">
+      <h2>Connection</h2>
+      <label>Service URL</label>
+      <input type="text" id="serviceUrl" placeholder="http://10.11.0.1:3000" />
+      <div id="connectionStatus" class="status disconnected">Disconnected</div>
+      <button class="btn-primary" onclick="connect()">Connect</button>
+      <button class="btn-danger" onclick="disconnect()">Disconnect</button>
+    </div>
+    <div class="card">
+      <h2>Subscribe</h2>
+      <label>Topic Pattern</label>
+      <input type="text" id="topicInput" placeholder="sensors/#" />
+      <button class="btn-success" onclick="subscribe()">Subscribe</button>
+      <div id="subscriptions" class="subscriptions"><span style="color:#555">None</span></div>
+      <div style="margin-top:10px">
+        <label>Suggested</label>
+        <div id="suggestedPatterns" class="pattern-list"><span style="color:#555">Connect first</span></div>
+      </div>
+    </div>
+    <div class="card" style="min-width:200px">
+      <h2>Controls</h2>
+      <label>Window (points)</label>
+      <input type="number" id="windowSize" value="200" min="10" max="2000" style="margin-bottom:10px" />
+      <button class="btn-ghost btn-small" onclick="clearAll()">Clear All</button>
+      <div style="margin-top:10px;padding:8px;background:#0a0a14;border-radius:4px">
+        <div style="color:#2ed573;font-size:0.85rem;margin-bottom:4px">📊 Messages Received: <span id="receivedCount" style="font-weight:600">0</span></div>
+        <div style="color:#00d9ff;font-size:0.85rem">📈 Unique Traces: <span id="traceCount" style="font-weight:600">0</span></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>Event Log</label>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+  </div>
+  <div class="topics-panel card">
+    <h2>Available Topics <span id="topicCount" class="topic-count">0</span>
+      <button class="btn-small btn-ghost" style="margin-left:8px" onclick="loadTopics()">↻ Refresh</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;float:right;color:#666;font-size:0.8rem;font-weight:normal;margin:0">
+        <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()" style="width:auto;margin:0" /> Auto
+      </label>
+    </h2>
+    <div class="filters">
+      <select id="filterModel" onchange="loadTopics()"><option value="">All Models</option></select>
+      <select id="filterBus" onchange="loadTopics()"><option value="">All Buses</option></select>
+      <select id="filterType" onchange="loadTopics()"><option value="">All Types</option></select>
+    </div>
+    <div id="availableTopics"><div style="color:#555;padding:10px">Connect and refresh to see sensors</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>Raw Event Dump <span id="dumpCount" class="topic-count">0</span>
+      <button class="btn-small btn-ghost" style="margin-left:8px" onclick="clearDump()">Clear</button>
+    </h2>
+    <div id="dumpLog" class="log" style="height:200px;font-size:0.72rem"></div>
+  </div>
+
+  <div id="scopeGrid" class="scope-grid">
+    <div class="empty-scope">Connect and subscribe to topics to see telemetry data</div>
+  </div>
+</div>
+
+<script>
+  let eventSource = null;
+  let clientId = null;
+  let dumpCount = 0;
+  let receivedCount = 0; // Track messages received via SSE
+
+  function appendDump(data) {
+    const el = document.getElementById('dumpLog');
+    const t = new Date().toLocaleTimeString();
+    const d = document.createElement('div');
+    d.className = 'log-entry';
+    d.innerHTML = `<span class="time">[${t}]</span> ${JSON.stringify(data)}`;
+    el.insertBefore(d, el.firstChild);
+    if (el.children.length > 500) el.removeChild(el.lastChild);
+    document.getElementById('dumpCount').textContent = ++dumpCount;
+  }
+
+  function clearDump() {
+    document.getElementById('dumpLog').innerHTML = '';
+    dumpCount = 0;
+    document.getElementById('dumpCount').textContent = 0;
+  }
+
+  const subscriptions = new Set();
+  const channels = new Map(); // key -> { data, points, canvas, ctx, color, units, channel, isSpi, spiRows }
+  const seenFingerprints = new Set();
+  let autoRefreshTimer = null;
+
+  const COLORS = ['#00d9ff','#2ed573','#ffa502','#ff4757','#a29bfe','#fd79a8','#00cec9','#e17055','#74b9ff','#55efc4','#fdcb6e','#6c5ce7','#fab1a0'];
+
+  const CHANNEL_COLORS = {
+    generate: '#00d9ff',
+    fifoPush: '#2ed573',
+    fifoPop:  '#ffa502',
+    spiRead:  '#a29bfe',
+    spiWrite: '#fd79a8',
+    debug:    '#888',
+  };
+
+  function channelColor(ch) { return CHANNEL_COLORS[ch] || COLORS[channels.size % COLORS.length]; }
+  function getServiceUrl() { return document.getElementById('serviceUrl').value.trim(); }
+  function getWindowSize() { return Math.max(10, parseInt(document.getElementById('windowSize').value) || 200); }
+
+  function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    const t = new Date().toLocaleTimeString();
+    const d = document.createElement('div');
+    d.className = `log-entry ${type}`;
+    d.innerHTML = `<span class="time">[${t}]</span> ${msg}`;
+    el.insertBefore(d, el.firstChild);
+    if (el.children.length > 300) el.removeChild(el.lastChild);
+  }
+
+  function updateStatus(connected) {
+    const el = document.getElementById('connectionStatus');
+    el.className = `status ${connected ? 'connected' : 'disconnected'}`;
+    el.textContent = connected ? `Connected (${clientId})` : 'Disconnected';
+  }
+
+  function renderSubscriptions() {
+    const el = document.getElementById('subscriptions');
+    if (!subscriptions.size) { el.innerHTML = '<span style="color:#555">None</span>'; return; }
+    el.innerHTML = Array.from(subscriptions).map(t =>
+      `<div class="sub-tag">${t}<button class="btn-danger" onclick="unsubscribe('${t}')">×</button></div>`
+    ).join('');
+  }
+
+  function fingerprint(data) {
+    const v = data.value;
+    if (v && typeof v === 'object' && 'timestamp' in v && 'measurement' in v) {
+      return `${data.sensorId}:${data.sensorType}:${v.type||''}:${v.timestamp}:${v.measurement}`;
+    }
+    if (v && typeof v === 'object' && 'type' in v && 'timestamp' in v && 'address' in v) {
+      // SPI messages - include address and sensorType to avoid deduplication
+      return `${data.sensorId}:${data.sensorType}:${v.type}:${v.address}:${v.timestamp}`;
+    }
+    if (v && typeof v === 'object' && 'type' in v && 'timestamp' in v) {
+      return `${data.sensorId}:${v.type}:${v.timestamp}`;
+    }
+    return null;
+  }
+
+  function extractPoint(data) {
+    const v = data.value;
+    if (typeof v === 'number') return { x: Date.now() / 1000, y: v, units: '', measurementType: '', sampleValue: undefined };
+    if (typeof v !== 'object' || v === null) return null;
+    if ('measurement' in v && 'timestamp' in v) {
+      return {
+        x: parseFloat(v.timestamp),
+        y: parseFloat(v.measurement),
+        units: v.units || '',
+        measurementType: v.type || '',
+        sampleValue: v.sampleValue,
+      };
+    }
+    return null;
+  }
+
+  function getOrCreateSpiPanel(key, data, channel) {
+    if (channels.has(key)) return channels.get(key);
+    const color = channelColor(channel);
+    const ch = { key, data, color, channel, isSpi: true, spiRows: [] };
+    channels.set(key, ch);
+    rebuildScopeGrid();
+    return ch;
+  }
+
+  function spiLogId(key) { return 'spi-log-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+
+  function parseByte(b) {
+    if (typeof b === 'number') return b;
+    return parseInt(b, 16);
+  }
+
+  function appendSpiRow(ch, v) {
+    const MAX_ROWS = 200;
+    ch.spiRows.push(v);
+    if (ch.spiRows.length > MAX_ROWS) ch.spiRows.shift();
+    const logEl = document.getElementById(spiLogId(ch.key));
+    if (!logEl) return;
+    const bytes = Array.isArray(v.bytes) ? v.bytes.map(b => parseByte(b).toString(16).padStart(2,'0')).join(' ') : '';
+    const ts = v.timestamp ? new Date(v.timestamp).toLocaleTimeString() : '';
+    const d = document.createElement('div');
+    // Use channel type from ch.channel (spiRead/spiWrite), not v.type (which is always "SPI")
+    d.className = `spi-entry ${ch.channel === 'spiWrite' ? 'spi-write' : 'spi-read'}`;
+    d.innerHTML = `<span class="time">[${ts}]</span> 0x${v.address||'??'} ${bytes}`;
+    logEl.insertBefore(d, logEl.firstChild);
+    while (logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
+  }
+
+  function getOrCreateChannel(key, data, channel) {
+    if (channels.has(key)) return channels.get(key);
+    const color = channelColor(channel);
+    const ch = { key, data, points: [], color, units: '', channel, isSpi: false };
+    channels.set(key, ch);
+    rebuildScopeGrid();
+    return ch;
+  }
+
+  function panelId(key)  { return 'panel-'  + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function canvasId(key) { return 'canvas-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function statsId(key)  { return 'stats-'  + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function latestId(key) { return 'latest-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+
+  function rebuildScopeGrid() {
+    const grid = document.getElementById('scopeGrid');
+    grid.innerHTML = '';
+    if (!channels.size) {
+      grid.innerHTML = '<div class="empty-scope">Connect and subscribe to topics to see telemetry data</div>';
+      return;
+    }
+    for (const [key, ch] of channels) {
+      if (ch.isSpi) {
+        renderSpiPanel(grid, ch);
+      } else {
+        renderScopePanel(grid, ch);
+      }
+    }
+  }
+
+  function renderSpiPanel(grid, ch) {
+    const panel = document.createElement('div');
+    panel.className = 'spi-panel';
+    panel.id = panelId(ch.key);
+    const chLabel = `<span class="type-badge" style="background:${ch.color}22;color:${ch.color}">${ch.channel}</span>`;
+    panel.innerHTML = `
+      <div class="scope-header">
+        <span class="scope-title" style="color:${ch.color}">SPI ${chLabel}</span>
+        <span class="scope-meta">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
+      </div>
+      <div class="spi-log" id="${spiLogId(ch.key)}"></div>`;
+    grid.appendChild(panel);
+    const logEl = document.getElementById(spiLogId(ch.key));
+    for (const v of ch.spiRows.slice().reverse()) {
+      const bytes = Array.isArray(v.bytes) ? v.bytes.map(b => parseByte(b).toString(16).padStart(2,'0')).join(' ') : '';
+      const ts = v.timestamp ? new Date(v.timestamp).toLocaleTimeString() : '';
+      const d = document.createElement('div');
+      d.className = `spi-entry ${ch.channel === 'spiWrite' ? 'spi-write' : 'spi-read'}`;
+      d.innerHTML = `<span class="time">[${ts}]</span> 0x${v.address||'??'} ${bytes}`;
+      logEl.appendChild(d);
+    }
+  }
+
+  function renderScopePanel(grid, ch) {
+    const panel = document.createElement('div');
+    panel.className = 'scope-panel';
+    panel.id = panelId(ch.key);
+    const chLabel = ch.channel
+      ? `<span class="type-badge" style="background:${ch.color}22;color:${ch.color}">${ch.channel}</span>`
+      : '';
+    const sensorTypeDisplay = Array.isArray(ch.data.sensorType) ? ch.data.sensorType.join(', ') : ch.data.sensorType;
+    panel.innerHTML = `
+      <div class="scope-header">
+        <span class="scope-title" style="color:${ch.color}">${sensorTypeDisplay} ${chLabel}</span>
+        <span class="scope-meta">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
+      </div>
+      <div class="scope-stats" id="${statsId(ch.key)}">waiting for data...</div>
+      <canvas class="scope" id="${canvasId(ch.key)}"></canvas>
+      <div class="scope-latest" id="${latestId(ch.key)}"></div>`;
+    grid.appendChild(panel);
+    const canvas = document.getElementById(canvasId(ch.key));
+    canvas.width = canvas.offsetWidth || 460;
+    canvas.height = 160;
+    ch.canvas = canvas;
+    ch.ctx = canvas.getContext('2d');
+  }
+
+  function drawScope(ch) {
+    const canvas = ch.canvas;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.offsetWidth;
+    if (canvas.width !== w * dpr) { canvas.width = w * dpr; canvas.height = 160 * dpr; ch.ctx.scale(dpr, dpr); }
+    const W = canvas.offsetWidth, H = 160;
+    const ctx = ch.ctx;
+    ctx.clearRect(0, 0, W, H);
+
+    const win = getWindowSize();
+    const pts = ch.points.slice(-win);
+    if (pts.length < 2) {
+      ctx.fillStyle = '#333'; ctx.font = '12px monospace';
+      ctx.fillText(`waiting... (${ch.points.length} pts)`, W / 2 - 60, H / 2);
+      return;
+    }
+
+    ctx.strokeStyle = '#1a1a3a'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) { const y = (H/4)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    for (let i = 0; i <= 8; i++) { const x = (W/8)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const yMin = Math.min(...ys), yMax = Math.max(...ys);
+    const xRange = xMax - xMin || 1, yRange = yMax - yMin || 1;
+    const toX = x => ((x - xMin) / xRange) * (W - 20) + 10;
+    const toY = y => H - 10 - ((y - yMin) / yRange) * (H - 20);
+
+    if (yMin < 0 && yMax > 0) {
+      ctx.strokeStyle = '#2a2a5a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, toY(0)); ctx.lineTo(W, toY(0)); ctx.stroke();
+    }
+
+    ctx.strokeStyle = ch.color; ctx.lineWidth = 1.5;
+    ctx.shadowColor = ch.color; ctx.shadowBlur = 4;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const px = toX(p.x), py = toY(p.y); i === 0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py); });
+    ctx.stroke(); ctx.shadowBlur = 0;
+
+    ctx.fillStyle = ch.color;
+    pts.forEach(p => { ctx.beginPath(); ctx.arc(toX(p.x), toY(p.y), 2.5, 0, Math.PI*2); ctx.fill(); });
+
+    ctx.fillStyle = '#555'; ctx.font = '10px monospace';
+    ctx.fillText(yMax.toFixed(2), 2, 12);
+    ctx.fillText(yMin.toFixed(2), 2, H - 4);
+    ctx.fillText(xMin.toFixed(1)+'s', 10, H - 4);
+    ctx.fillText(xMax.toFixed(1)+'s', W - 50, H - 4);
+
+    const statsEl = document.getElementById(statsId(ch.key));
+    if (statsEl) {
+      const latest = pts[pts.length - 1];
+      statsEl.textContent = `n=${ch.points.length}  min=${yMin.toFixed(4)}  max=${yMax.toFixed(4)}  latest=${latest.y.toFixed(4)} ${ch.units}`;
+    }
+    const latestEl = document.getElementById(latestId(ch.key));
+    if (latestEl) {
+      const p = pts[pts.length - 1];
+      const sv = p.sampleValue !== undefined ? `  raw=0x${p.sampleValue.toString(16).padStart(6,'0')}` : '';
+      latestEl.textContent = `▶ ${p.y.toFixed(6)} ${ch.units}  @${p.x.toFixed(3)}s${sv}`;
+    }
+  }
+
+  function ingestMessage(data) {
+    appendDump(data);
+    receivedCount++;
+    document.getElementById('receivedCount').textContent = receivedCount;
+    document.getElementById('traceCount').textContent = channels.size;
+    
+    const fp = fingerprint(data);
+    if (fp) {
+      if (seenFingerprints.has(fp)) return;
+      seenFingerprints.add(fp);
+      if (seenFingerprints.size > 50000) {
+        const iter = seenFingerprints.values();
+        for (let i = 0; i < 10000; i++) seenFingerprints.delete(iter.next().value);
+      }
+    }
+
+    const v = data.value;
+    const sensorTypeArray = Array.isArray(data.sensorType) ? data.sensorType : [data.sensorType];
+    const primaryChannel = sensorTypeArray[0];
+
+    // Debug messages
+    if (primaryChannel === 'debug' || primaryChannel === 'debugString') {
+      const msg = (typeof v === 'object' && v !== null && v.string) ? v.string : JSON.stringify(v);
+      log(`debug: ${msg}`);
+      return;
+    }
+
+    // SPI transactions - channel IS the sensorType (spiRead/spiWrite)
+    if (primaryChannel === 'spiRead' || primaryChannel === 'spiWrite') {
+      const key = `SPI::${data.sensorId}::${primaryChannel}`;
+      const ch = getOrCreateSpiPanel(key, data, primaryChannel);
+      if (v && typeof v === 'object') {
+        appendSpiRow(ch, v);
+      }
+      return;
+    }
+
+    // Structured samples (PSTAT, CHRONO A, etc.) - measurement data
+    const pt = extractPoint(data);
+    if (!pt) { 
+      log(`${primaryChannel}: ${JSON.stringify(v)}`); 
+      return; 
+    }
+
+    // Create separate panel per channel + measurement type combination
+    const measurementType = pt.measurementType || '';
+    const key = `${primaryChannel}::${data.sensorId}::${measurementType}`;
+    const ch = getOrCreateChannel(key, data, primaryChannel);
+    ch.units = pt.units || ch.units;
+    ch.points.push(pt);
+    
+    const maxBuf = getWindowSize() * 10;
+    if (ch.points.length > maxBuf) ch.points.splice(0, ch.points.length - maxBuf);
+    
+    if (!ch.canvas) {
+      const canvas = document.getElementById(canvasId(key));
+      if (canvas) { ch.canvas = canvas; ch.ctx = canvas.getContext('2d'); }
+    }
+    drawScope(ch);
+  }
+
+  function clearAll() {
+    channels.clear();
+    seenFingerprints.clear();
+    receivedCount = 0;
+    document.getElementById('receivedCount').textContent = 0;
+    document.getElementById('traceCount').textContent = 0;
+    rebuildScopeGrid();
+    log('Cleared all traces');
+  }
+
+  async function loadTopics() {
+    const baseUrl = getServiceUrl();
+    if (!baseUrl) return;
+    const m = document.getElementById('filterModel').value;
+    const b = document.getElementById('filterBus').value;
+    const t = document.getElementById('filterType').value;
+    let url = `${baseUrl}/topics?`;
+    if (m) url += `sourceModelId=${encodeURIComponent(m)}&`;
+    if (b) url += `deviceBus=${encodeURIComponent(b)}&`;
+    if (t) url += `sensorType=${encodeURIComponent(t)}&`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const sensors = data.sensors || [];
+      renderAvailableTopics(sensors);
+      renderSuggestedPatterns(data.suggestedPatterns || []);
+      updateFilters(data.filters);
+      for (const s of sensors) {
+        if (s.lastValue) ingestMessage(s.lastValue);
+      }
+      setTimeout(() => {
+        for (const ch of channels.values()) {
+          if (!ch.isSpi && !ch.canvas) { rebuildScopeGrid(); break; }
+        }
+        for (const ch of channels.values()) { if (!ch.isSpi) drawScope(ch); }
+      }, 50);
+      log(`Loaded ${sensors.length} sensors`, 'success');
+    } catch (e) { log(`Topics error: ${e.message}`, 'error'); }
+  }
+
+  function renderAvailableTopics(sensors) {
+    const el = document.getElementById('availableTopics');
+    document.getElementById('topicCount').textContent = sensors.length;
+    if (!sensors.length) { el.innerHTML = '<div style="color:#555;padding:8px">No sensors yet</div>'; return; }
+    el.innerHTML = sensors.map(s => {
+      const sub = subscriptions.has(s.topic);
+      const sensorTypeDisplay = Array.isArray(s.sensorType) ? s.sensorType.join(', ') : s.sensorType;
+      const measurementTypes = s.registrationMetadata?.type ? `<br>Measurements: ${s.registrationMetadata.type.join(', ')}` : '';
+      return `<div class="topic-item ${sub ? 'active' : ''}">
+        <div class="info">
+          <div class="topic">${s.topic}${sub ? ' ✓' : ''}</div>
+          <div class="details">Channels: <strong style="color:#ccc">${sensorTypeDisplay}</strong> | Bus: ${s.deviceBus} | Model: ${s.sourceModelId} | ${s.messageCount} msgs | Last: ${new Date(s.lastSeen).toLocaleTimeString()}${measurementTypes}</div>
+        </div>
+        ${sub
+          ? `<button class="btn-danger btn-small" onclick="unsubscribe('${s.topic}')">Unsub</button>`
+          : `<button class="btn-success btn-small" onclick="subscribeToTopic('${s.topic}')">Sub</button>`}
+      </div>`;
+    }).join('');
+  }
+
+  function renderSuggestedPatterns(patterns) {
+    const el = document.getElementById('suggestedPatterns');
+    if (!patterns.length) { 
+      // Generate default patterns for all telemetry channels
+      const defaultPatterns = [
+        'sensors/#',
+        'sensors/+/+/fifoPop/+/#',
+        'sensors/+/+/fifoPush/+/#',
+        'sensors/+/+/generate/+/#',
+        'sensors/+/+/spiRead/+/#',
+        'sensors/+/+/spiWrite/+/#',
+        'sensors/+/+/debug/+/#'
+      ];
+      el.innerHTML = defaultPatterns.map(p => `<div class="pattern-tag" onclick="subscribeToTopic('${p}')">${p}</div>`).join('');
+      return;
+    }
+    el.innerHTML = patterns.map(p => `<div class="pattern-tag" onclick="subscribeToTopic('${p}')">${p}</div>`).join('');
+  }
+
+  function updateFilters(filters) {
+    if (!filters) return;
+    const ms = document.getElementById('filterModel'); const mv = ms.value;
+    ms.innerHTML = '<option value="">All Models</option>' + filters.sourceModelIds.map(m => `<option ${m===mv?'selected':''}>${m}</option>`).join('');
+    const bs = document.getElementById('filterBus'); const bv = bs.value;
+    bs.innerHTML = '<option value="">All Buses</option>' + filters.deviceBuses.map(b => `<option ${b===bv?'selected':''}>${b}</option>`).join('');
+    const ts = document.getElementById('filterType'); const tv = ts.value;
+    ts.innerHTML = '<option value="">All Types</option>' + filters.sensorTypes.map(t => `<option ${t===tv?'selected':''}>${t}</option>`).join('');
+  }
+
+  function toggleAutoRefresh() {
+    const on = document.getElementById('autoRefresh').checked;
+    if (on) { autoRefreshTimer = setInterval(loadTopics, 5000); }
+    else { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  }
+
+  function subscribeToTopic(topic) { document.getElementById('topicInput').value = topic; subscribe(); }
+
+  function connect() {
+    if (eventSource) disconnect();
+    const baseUrl = getServiceUrl();
+    if (!baseUrl) { log('Enter a Service URL first', 'error'); return; }
+    eventSource = new EventSource(`${baseUrl}/subscribe`);
+    eventSource.addEventListener('connected', e => {
+      clientId = JSON.parse(e.data).clientId;
+      updateStatus(true);
+      log(`Connected: ${clientId}`, 'success');
+      
+      // Auto-subscribe to all telemetry channels with correct 6-segment pattern
+      const defaultPatterns = [
+        'sensors/+/+/fifoPop/+/#',
+        'sensors/+/+/fifoPush/+/#',
+        'sensors/+/+/generate/+/#',
+        'sensors/+/+/spiRead/+/#',
+        'sensors/+/+/spiWrite/+/#',
+        'sensors/+/+/debug/+/#'
+      ];
+      
+      let historyTotal = 0;
+      Promise.all(defaultPatterns.map(pattern => {
+        subscriptions.add(pattern);
+        return fetch(`${baseUrl}/subscribe`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({clientId, topic: pattern})
+        })
+          .then(r => r.json())
+          .then(r => {
+            const count = r.historyQueued || 0;
+            historyTotal += count;
+            log(`Subscribed: ${pattern} (${count} msgs queued for replay)`, 'success');
+          });
+      }))
+        .then(() => {
+          renderSubscriptions();
+          log(`✓ Total history queued: ${historyTotal} messages`, 'success');
+          loadTopics();
+        })
+        .catch(e => log(`Auto-subscribe error: ${e.message}`, 'error'));
+    });
+    eventSource.addEventListener('sensor', e => {
+      const data = JSON.parse(e.data);
+      ingestMessage(data);
+      // Update counters in real-time
+      document.getElementById('receivedCount').textContent = receivedCount;
+      document.getElementById('traceCount').textContent = channels.size;
+    });
+    eventSource.addEventListener('heartbeat', () => {});
+    eventSource.onerror = () => { log('Connection error', 'error'); updateStatus(false); };
+  }
+
+  function disconnect() {
+    if (eventSource) { eventSource.close(); eventSource = null; clientId = null; updateStatus(false); log('Disconnected'); }
+  }
+
+  async function subscribe() {
+    const topic = document.getElementById('topicInput').value.trim();
+    if (!topic) return;
+    if (clientId) {
+      try {
+        const res = await fetch(`${getServiceUrl()}/subscribe`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({clientId, topic})
+        });
+        const r = await res.json();
+        if (res.ok) {
+          subscriptions.add(topic);
+          renderSubscriptions();
+          log(`✓ Subscribed: ${topic} (${r.historyQueued||0} msgs queued for replay)`, 'success');
+        }
+      } catch (e) { log(`Subscribe error: ${e.message}`, 'error'); }
+    } else {
+      subscriptions.add(topic);
+      renderSubscriptions();
+    }
+    document.getElementById('topicInput').value = '';
+  }
+
+  async function unsubscribe(topic) {
+    if (clientId) {
+      try { 
+        await fetch(`${getServiceUrl()}/subscribe`, { 
+          method: 'DELETE', 
+          headers: {'Content-Type':'application/json'}, 
+          body: JSON.stringify({clientId, topic}) 
+        });
+      } catch (e) {}
+    }
+    subscriptions.delete(topic); 
+    renderSubscriptions(); 
+    log(`Unsubscribed: ${topic}`);
+  }
+
+  window.addEventListener('resize', () => { 
+    for (const ch of channels.values()) { 
+      if (!ch.isSpi) drawScope(ch); 
+    } 
+  });
+</script>
+</body>
+</html>

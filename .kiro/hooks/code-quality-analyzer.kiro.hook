@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Code Quality Analyzer",
+  "description": "Analyzes modified source code for potential improvements including code smells, design patterns, and best practices. Generates and applies suggestions for improving readability, maintainability, and performance while updating steering docs.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.ts",
+      "src/**/*.js",
+      "src/**/*.tsx",
+      "src/**/*.jsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the code changes I just made for potential improvements. Look for:\n\n1. **Code Smells**: Long methods, duplicate code, dead code, complex conditionals, magic numbers/strings\n2. **Design Patterns**: Opportunities to apply appropriate patterns (Repository, Factory, Observer, etc.)\n3. **Best Practices**: TypeScript/JavaScript conventions, error handling, async patterns, proper typing\n4. **Readability**: Naming conventions, code organization, comments where needed\n5. **Maintainability**: Single responsibility, loose coupling, proper abstractions\n6. **Performance**: Unnecessary iterations, memory leaks, inefficient algorithms, caching opportunities\n\nFor each issue found:\n- Explain the problem clearly\n- Implement the suggested fix directly in the code\n- Ensure existing functionality is preserved\n\nAfter making improvements, update or create steering documentation in `.kiro/steering/` to capture any new patterns, conventions, or best practices discovered that should be followed project-wide."
+  }
+}

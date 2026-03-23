@@ -1,0 +1,4 @@
+*.a
+*.o
+coremodel-spi-adi
+coremodel-spi-max30123-file

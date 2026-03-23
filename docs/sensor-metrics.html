@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sensor Service Metrics</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a14; color: #eee; min-height: 100vh; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { color: #00d9ff; margin-bottom: 20px; font-size: 1.8rem; }
+    .nav { margin-bottom: 20px; }
+    .nav a { color: #00d9ff; text-decoration: none; margin-right: 20px; padding: 8px 12px; border-radius: 4px; background: #12122a; }
+    .nav a:hover { background: #1a1a3a; }
+    .top-bar { display: grid; grid-template-columns: 1fr auto; gap: 16px; margin-bottom: 20px; align-items: start; }
+    .card { background: #12122a; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .card h2 { color: #00d9ff; margin-bottom: 12px; font-size: 1.1rem; }
+    label { display: block; margin-bottom: 6px; color: #888; font-size: 0.9rem; }
+    input { width: 100%; padding: 10px; border: 1px solid: #2a2a4a; border-radius: 4px; background: #0a0a14; color: #eee; margin-bottom: 12px; font-size: 0.9rem; }
+    button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+    .btn-primary { background: #00d9ff; color: #000; }
+    .btn-ghost { background: #2a2a4a; color: #aaa; margin-left: 8px; }
+    .status { padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 0.9rem; }
+    .status.connected { background: #2ed57322; color: #2ed573; }
+    .status.disconnected { background: #ff475722; color: #ff4757; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .metric-card { background: #0d0d1f; border-radius: 8px; padding: 16px; border: 1px solid #1e1e3a; }
+    .metric-label { color: #888; font-size: 0.85rem; margin-bottom: 4px; }
+    .metric-value { color: #00d9ff; font-size: 2rem; font-weight: 700; }
+    .metric-unit { color: #666; font-size: 0.9rem; margin-left: 4px; }
+    .metric-subtext { color: #666; font-size: 0.8rem; margin-top: 4px; }
+    .progress-bar { background: #1a1a2e; border-radius: 4px; height: 8px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { background: linear-gradient(90deg, #00d9ff, #2ed573); height: 100%; transition: width 0.3s; }
+    .progress-fill.warning { background: linear-gradient(90deg, #ffa502, #ff4757); }
+    .topic-list { background: #0a0a14; border-radius: 4px; padding: 12px; max-height: 300px; overflow-y: auto; }
+    .topic-item { padding: 6px 8px; border-bottom: 1px solid #1a1a2e; font-family: monospace; font-size: 0.8rem; color: #aaa; }
+    .topic-item:last-child { border-bottom: none; }
+    .health-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+    .health-indicator.healthy { background: #2ed573; box-shadow: 0 0 8px #2ed573; }
+    .health-indicator.degraded { background: #ffa502; box-shadow: 0 0 8px #ffa502; }
+    .health-indicator.unhealthy { background: #ff4757; box-shadow: 0 0 8px #ff4757; }
+    .timestamp { color: #555; font-size: 0.75rem; margin-top: 8px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 Sensor Service Metrics</h1>
+  
+  <div class="nav">
+    <a href="sensor-dashboard.html">← Back to Dashboard</a>
+  </div>
+
+  <div class="top-bar">
+    <div class="card">
+      <h2>Connection</h2>
+      <label>Service URL</label>
+      <input type="text" id="serviceUrl" placeholder="http://10.11.0.1:3000" value="http://10.11.0.1:3000" />
+      <div id="connectionStatus" class="status disconnected">Not Connected</div>
+      <button class="btn-primary" onclick="startPolling()">Start Monitoring</button>
+      <button class="btn-ghost" onclick="stopPolling()">Stop</button>
+    </div>
+    <div class="card">
+      <h2>Refresh Rate</h2>
+      <label>Update Interval (seconds)</label>
+      <input type="number" id="refreshInterval" value="5" min="1" max="60" />
+      <div class="timestamp" id="lastUpdate">Never updated</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Service Health</h2>
+    <div id="healthStatus" style="font-size: 1.1rem; padding: 12px 0;">
+      <span class="health-indicator"></span>
+      <span>Waiting for data...</span>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Messages Received</div>
+      <div class="metric-value" id="messagesReceived">-</div>
+      <div class="metric-subtext" id="messageRate">-</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Messages Processed</div>
+      <div class="metric-value" id="messagesProcessed">-</div>
+      <div class="metric-subtext" id="processRate">-</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Messages Failed</div>
+      <div class="metric-value" id="messagesFailed">-</div>
+      <div class="metric-subtext" id="failureRate">-</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Active Connections</div>
+      <div class="metric-value" id="activeConnections">-</div>
+      <div class="metric-subtext">SSE clients</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">Average Latency</div>
+      <div class="metric-value" id="averageLatency">-</div>
+      <div class="metric-unit">ms</div>
+      <div class="metric-subtext">Message processing time</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <h2>Topic Buffer Status</h2>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Active Topics</div>
+        <div class="metric-value" id="bufferTopicCount">-</div>
+        <div class="metric-subtext">Topics with buffered messages</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Total Buffered Messages</div>
+        <div class="metric-value" id="bufferTotalMessages">-</div>
+        <div class="metric-subtext" id="bufferMemoryEstimate">-</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Buffer Capacity</div>
+        <div class="metric-value" id="bufferMaxPerTopic">-</div>
+        <div class="metric-unit">per topic</div>
+        <div class="metric-subtext">Configured maximum</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 16px;">
+      <h3 style="color: #888; font-size: 0.9rem; margin-bottom: 8px;">Buffered Topics</h3>
+      <div id="bufferTopics" class="topic-list">
+        <div style="color: #555; text-align: center; padding: 20px;">No data yet</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>FIFO Queue Status</h2>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Ingestion Queue</div>
+        <div class="metric-value" id="fifoIngestionCount">-</div>
+        <div class="metric-unit">/ <span id="fifoIngestionCapacity">-</span></div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="fifoIngestionProgress" style="width: 0%"></div>
+        </div>
+        <div class="metric-subtext">
+          Fill: <span id="fifoIngestionPercent">0</span>% | 
+          Overflows: <span id="fifoIngestionOverflow">0</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Processing Queue</div>
+        <div class="metric-value" id="fifoProcessingCount">-</div>
+        <div class="metric-unit">/ <span id="fifoProcessingCapacity">-</span></div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="fifoProcessingProgress" style="width: 0%"></div>
+        </div>
+        <div class="metric-subtext">
+          Fill: <span id="fifoProcessingPercent">0</span>% | 
+          Overflows: <span id="fifoProcessingOverflow">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let pollingInterval = null;
+  let previousMetrics = null;
+  let lastPollTime = null;
+
+  function getServiceUrl() {
+    return document.getElementById('serviceUrl').value.trim();
+  }
+
+  function getRefreshInterval() {
+    return Math.max(1, parseInt(document.getElementById('refreshInterval').value) || 5) * 1000;
+  }
+
+  function updateConnectionStatus(connected) {
+    const el = document.getElementById('connectionStatus');
+    el.className = `status ${connected ? 'connected' : 'disconnected'}`;
+    el.textContent = connected ? 'Connected - Monitoring' : 'Not Connected';
+  }
+
+  function formatNumber(num) {
+    if (num === undefined || num === null) return '-';
+    return num.toLocaleString();
+  }
+
+  function formatRate(current, previous, timeDeltaMs) {
+    if (!previous || !timeDeltaMs) return '';
+    const delta = current - previous;
+    const ratePerSec = (delta / timeDeltaMs) * 1000;
+    if (ratePerSec < 0.01) return '~0 msg/s';
+    return `${ratePerSec.toFixed(2)} msg/s`;
+  }
+
+  function updateHealthStatus(health) {
+    const el = document.getElementById('healthStatus');
+    const indicator = el.querySelector('.health-indicator');
+    const text = el.querySelector('span:last-child');
+    
+    if (!health) {
+      indicator.className = 'health-indicator';
+      text.textContent = 'Waiting for data...';
+      return;
+    }
+
+    indicator.className = `health-indicator ${health.status}`;
+    text.textContent = `Status: ${health.status.toUpperCase()}`;
+    
+    if (health.checks) {
+      const checks = Object.entries(health.checks)
+        .map(([key, value]) => `${key}: ${value ? '✓' : '✗'}`)
+        .join(' | ');
+      text.textContent += ` (${checks})`;
+    }
+  }
+
+  function updateMetrics(metrics) {
+    const now = Date.now();
+    const timeDelta = lastPollTime ? now - lastPollTime : null;
+
+    // Message metrics
+    document.getElementById('messagesReceived').textContent = formatNumber(metrics.messagesReceived);
+    document.getElementById('messagesProcessed').textContent = formatNumber(metrics.messagesProcessed);
+    document.getElementById('messagesFailed').textContent = formatNumber(metrics.messagesFailed);
+    document.getElementById('activeConnections').textContent = formatNumber(metrics.activeConnections);
+    document.getElementById('averageLatency').textContent = 
+      metrics.averageLatencyMs !== undefined ? metrics.averageLatencyMs.toFixed(2) : '-';
+
+    // Calculate rates
+    if (previousMetrics && timeDelta) {
+      document.getElementById('messageRate').textContent = 
+        formatRate(metrics.messagesReceived, previousMetrics.messagesReceived, timeDelta);
+      document.getElementById('processRate').textContent = 
+        formatRate(metrics.messagesProcessed, previousMetrics.messagesProcessed, timeDelta);
+      const failRate = formatRate(metrics.messagesFailed, previousMetrics.messagesFailed, timeDelta);
+      document.getElementById('failureRate').textContent = failRate || '0 failures';
+    }
+
+    // Buffer metrics
+    if (metrics.buffer) {
+      document.getElementById('bufferTopicCount').textContent = formatNumber(metrics.buffer.topicCount);
+      document.getElementById('bufferTotalMessages').textContent = formatNumber(metrics.buffer.totalMessages);
+      document.getElementById('bufferMaxPerTopic').textContent = formatNumber(metrics.buffer.maxPerTopic);
+      
+      // Memory estimate (400 bytes per message)
+      const memoryMB = (metrics.buffer.totalMessages * 400 / 1024 / 1024).toFixed(2);
+      document.getElementById('bufferMemoryEstimate').textContent = `~${memoryMB} MB in memory`;
+
+      // Render topics
+      const topicsEl = document.getElementById('bufferTopics');
+      if (metrics.buffer.topics && metrics.buffer.topics.length > 0) {
+        topicsEl.innerHTML = metrics.buffer.topics
+          .map(topic => `<div class="topic-item">${topic}</div>`)
+          .join('');
+      } else {
+        topicsEl.innerHTML = '<div style="color: #555; text-align: center; padding: 20px;">No buffered topics</div>';
+      }
+    }
+
+    // FIFO metrics
+    if (metrics.fifo) {
+      // Ingestion queue
+      const ing = metrics.fifo.ingestion;
+      document.getElementById('fifoIngestionCount').textContent = formatNumber(ing.count);
+      document.getElementById('fifoIngestionCapacity').textContent = formatNumber(ing.capacity);
+      document.getElementById('fifoIngestionPercent').textContent = ing.fillPercent || 0;
+      document.getElementById('fifoIngestionOverflow').textContent = formatNumber(ing.overflowCount);
+      
+      const ingProgress = document.getElementById('fifoIngestionProgress');
+      ingProgress.style.width = `${ing.fillPercent || 0}%`;
+      ingProgress.className = `progress-fill ${ing.fillPercent > 80 ? 'warning' : ''}`;
+
+      // Processing queue
+      const proc = metrics.fifo.processing;
+      document.getElementById('fifoProcessingCount').textContent = formatNumber(proc.count);
+      document.getElementById('fifoProcessingCapacity').textContent = formatNumber(proc.capacity);
+      document.getElementById('fifoProcessingPercent').textContent = proc.fillPercent || 0;
+      document.getElementById('fifoProcessingOverflow').textContent = formatNumber(proc.overflowCount);
+      
+      const procProgress = document.getElementById('fifoProcessingProgress');
+      procProgress.style.width = `${proc.fillPercent || 0}%`;
+      procProgress.className = `progress-fill ${proc.fillPercent > 80 ? 'warning' : ''}`;
+    }
+
+    // Update timestamp
+    document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+    previousMetrics = metrics;
+    lastPollTime = now;
+  }
+
+  async function fetchMetrics() {
+    const baseUrl = getServiceUrl();
+    if (!baseUrl) {
+      console.error('No service URL configured');
+      return;
+    }
+
+    try {
+      // Fetch metrics
+      const metricsRes = await fetch(`${baseUrl}/metrics`);
+      const metrics = await metricsRes.json();
+
+      // Fetch health
+      const healthRes = await fetch(`${baseUrl}/health`);
+      const health = await healthRes.json();
+
+      updateConnectionStatus(true);
+      updateHealthStatus(health);
+      updateMetrics(metrics);
+    } catch (error) {
+      console.error('Failed to fetch metrics:', error);
+      updateConnectionStatus(false);
+      updateHealthStatus(null);
+    }
+  }
+
+  function startPolling() {
+    if (pollingInterval) {
+      stopPolling();
+    }
+
+    const interval = getRefreshInterval();
+    fetchMetrics(); // Immediate first fetch
+    pollingInterval = setInterval(fetchMetrics, interval);
+    updateConnectionStatus(true);
+  }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+    updateConnectionStatus(false);
+  }
+
+  // Auto-start on load
+  window.addEventListener('load', () => {
+    startPolling();
+  });
+
+  // Cleanup on unload
+  window.addEventListener('beforeunload', () => {
+    stopPolling();
+  });
+</script>
+</body>
+</html>
