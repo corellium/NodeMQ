@@ -26,11 +26,15 @@ NODE_OPTIONS='--experimental-vm-modules' npx jest --silent --passWithNoTests 2>/
 rm -rf "${PACKAGE_NAME}" "${PACKAGE_NAME}.tar.gz"
 mkdir -p "${PACKAGE_NAME}"
 
-# Copy minimal service files only
-echo "📦 Packaging minimal deployment (service code only)..."
+# Copy service files
+echo "📦 Packaging deployment files..."
 cp -r dist "${PACKAGE_NAME}/"
 cp package.json package-lock.json "${PACKAGE_NAME}/"
 cp README.md "${PACKAGE_NAME}/" 2>/dev/null || true
+
+# Copy install script
+cp scripts/install.sh "${PACKAGE_NAME}/"
+chmod +x "${PACKAGE_NAME}/install.sh"
 
 # Copy existing config if present
 if [ -f "config.json" ]; then
@@ -43,16 +47,18 @@ rm -rf "${PACKAGE_NAME}"
 
 echo ""
 echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
-echo "   Minimal deployment package containing:"
+echo "   Deployment package containing:"
 echo "     dist/          — Compiled NodeMQ service"
 echo "     package.json   — Dependencies"
 echo "     config.json    — Service configuration"
+echo "     install.sh     — Installation script"
 echo "     README.md      — Documentation"
 echo ""
-echo "   Deploy: scp ${PACKAGE_NAME}.tar.gz user@10.11.0.1:/tmp/"
-echo "           On server:"
-echo "             cd /opt/sensor-service"
-echo "             sudo systemctl stop sensor-service"
-echo "             tar -xzf /tmp/${PACKAGE_NAME}.tar.gz --strip-components=1"
-echo "             npm install --production"
-echo "             sudo systemctl start sensor-service"
+echo "   Deploy:"
+echo "     scp ${PACKAGE_NAME}.tar.gz root@<device-ip>:/tmp/"
+echo ""
+echo "   Install on server:"
+echo "     cd /tmp"
+echo "     tar -xzf ${PACKAGE_NAME}.tar.gz"
+echo "     cd ${PACKAGE_NAME}"
+echo "     sudo ./install.sh"

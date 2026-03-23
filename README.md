@@ -68,6 +68,16 @@ This creates `sensor-service-<version>.tar.gz` (e.g., `sensor-service-1.0.0.tar.
 
 ### Step 2: Deploy to Generic Linux
 
+#### Update the Generic Linux Server
+
+```bash
+# Update the apt repository
+sudo apt update
+
+# Install the required packages from apt
+sudo apt install make gcc build-essentials git npm nodejs
+```
+
 #### Transfer the Package
 
 ```bash
@@ -155,19 +165,18 @@ The `coremodel-spi-max30123-file` binary simulates a MAX30123 SPI peripheral and
 The Viser Python script (`Viser_max30123_Meas_Timing.py`) generates realistic sensor data based on MAX30123 register configuration:
 
 ```bash
-# Navigate to the peripheral model directory
-cd /opt/sensor-service/peripheral/spi-adi  # or wherever you've placed the files
+# Navigate to the docs directory of the repo and create a tarball
+tar -czf docs/coremodel-ADI-Demo.tar.gz -C docs coremodel-ADI-Demo
 
-# The Viser script needs an input file with register configuration
-# Create Sequencer_InFile.csv with register addresses and values
-# (This file defines the MAX30123 configuration)
+# Copy the tarball to the /home/user of the Generic Linux server 
+scp docs/coremodel-ADI-Demo.tar.gz user@<server ip address>:/home/user
 
-# Run the Viser script to generate sample data
-python3 Viser_max30123_Meas_Timing.py
+# Untar the coremodel tarball
+tar -xvf coremodel-ADI-Demo.tar.gz
 
-# This creates max30123_FIFO_data.csv with 944 sample rows
-# Format: Time,Type,Min,Tag,Value,Units,Byte2,Byte1,Byte0
-# Example: 205.788,PSTAT,0,0,32.899,nA,0,83,98
+#Navigate to the spi-adi directory and make the files
+cd coremodel-ADI-Demo/examples/spi-adi
+make
 ```
 
 The Viser script:
