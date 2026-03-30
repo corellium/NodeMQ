@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # Auto-login Configuration Script
-# Configures Ubuntu 24.04 to automatically login as user "user"
-# Supports GDM3 and LightDM display managers
+# Configures serial console auto-login and startup script for user "user"
 
 set -e
 
 USERNAME="user"
+USER_HOME="/home/$USERNAME"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -27,118 +29,9 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Function to detect the display manager
-detect_display_manager() {
-    print_info "Detecting display manager..."
-    
-    # Check for GDM3
-    if systemctl status gdm3 &>/dev/null || systemctl status gdm &>/dev/null; then
-        echo "gdm3"
-        return 0
-    fi
-    
-    # Check for LightDM
-    if systemctl status lightdm &>/dev/null; then
-        echo "lightdm"
-        return 0
-    fi
-    
-    # Check default display manager file
-    if [ -f /etc/X11/default-display-manager ]; then
-        local dm_path=$(cat /etc/X11/default-display-manager)
-        if [[ "$dm_path" == *"gdm"* ]]; then
-            echo "gdm3"
-            return 0
-        elif [[ "$dm_path" == *"lightdm"* ]]; then
-            echo "lightdm"
-            return 0
-        fi
-    fi
-    
-    echo "unknown"
-    return 1
-}
-
-# Function to configure GDM3 for auto-login
-configure_gdm3() {
-    local config_file="/etc/gdm3/custom.conf"
-    
-    print_info "Configuring GDM3 for auto-login..."
-    
-    # Check if config file exists
-    if [ ! -f "$config_file" ]; then
-        print_error "GDM3 configuration file not found: $config_file"
-        return 1
-    fi
-    
-    # Backup the original configuration
-    if [ ! -f "${config_file}.backup" ]; then
-        print_info "Creating backup of GDM3 configuration..."
-        cp "$config_file" "${config_file}.backup"
-    fi
-    
-    # Check if [daemon] section exists
-    if grep -q "^\[daemon\]" "$config_file"; then
-        # Section exists, check if auto-login is already configured
-        if grep -q "^AutomaticLoginEnable" "$config_file"; then
-            # Update existing settings
-            sed -i "s/^AutomaticLoginEnable=.*/AutomaticLoginEnable=true/" "$config_file"
-            sed -i "s/^AutomaticLogin=.*/AutomaticLogin=$USERNAME/" "$config_file"
-        else
-            # Add auto-login settings under [daemon] section
-            sed -i "/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin=$USERNAME" "$config_file"
-        fi
-    else
-        # Add [daemon] section with auto-login settings
-        echo -e "\n[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=$USERNAME" >> "$config_file"
-    fi
-    
-    print_info "GDM3 configured successfully for user: $USERNAME"
-    return 0
-}
-
-# Function to configure LightDM for auto-login
-configure_lightdm() {
-    local config_file="/etc/lightdm/lightdm.conf"
-    
-    print_info "Configuring LightDM for auto-login..."
-    
-    # Check if config file exists, create if it doesn't
-    if [ ! -f "$config_file" ]; then
-        print_warning "LightDM configuration file not found, creating: $config_file"
-        mkdir -p /etc/lightdm
-        touch "$config_file"
-    fi
-    
-    # Backup the original configuration
-    if [ ! -f "${config_file}.backup" ]; then
-        print_info "Creating backup of LightDM configuration..."
-        cp "$config_file" "${config_file}.backup"
-    fi
-    
-    # Check if [Seat:*] section exists
-    if grep -q "^\[Seat:\*\]" "$config_file"; then
-        # Section exists, check if auto-login is already configured
-        if grep -q "^autologin-user" "$config_file"; then
-            # Update existing settings
-            sed -i "s/^autologin-user=.*/autologin-user=$USERNAME/" "$config_file"
-            sed -i "s/^autologin-user-timeout=.*/autologin-user-timeout=0/" "$config_file"
-        else
-            # Add auto-login settings under [Seat:*] section
-            sed -i "/^\[Seat:\*\]/a autologin-user=$USERNAME\nautologin-user-timeout=0" "$config_file"
-        fi
-    else
-        # Add [Seat:*] section with auto-login settings
-        echo -e "\n[Seat:*]\nautologin-user=$USERNAME\nautologin-user-timeout=0" >> "$config_file"
-    fi
-    
-    print_info "LightDM configured successfully for user: $USERNAME"
-    return 0
-}
-
 # Main execution
 main() {
-    print_info "Starting auto-login configuration..."
+    print_info "Starting auto-login configuration for serial console..."
     
     # Check if running as root
     if [ "$EUID" -ne 0 ]; then
@@ -146,57 +39,65 @@ main() {
         exit 1
     fi
     
-    # Detect display manager
-    display_manager=$(detect_display_manager)
-    
-    if [ "$display_manager" == "unknown" ]; then
-        print_error "Unsupported or unknown display manager detected"
-        print_error "This script supports GDM3 and LightDM only"
-        print_error ""
-        print_error "Manual configuration required:"
-        print_error "For GDM3: Edit /etc/gdm3/custom.conf and add:"
-        print_error "  [daemon]"
-        print_error "  AutomaticLoginEnable=true"
-        print_error "  AutomaticLogin=$USERNAME"
-        print_error ""
-        print_error "For LightDM: Edit /etc/lightdm/lightdm.conf and add:"
-        print_error "  [Seat:*]"
-        print_error "  autologin-user=$USERNAME"
-        print_error "  autologin-user-timeout=0"
+    # Check if user exists
+    if ! id "$USERNAME" &>/dev/null; then
+        print_error "User '$USERNAME' does not exist"
         exit 1
     fi
     
-    print_info "Detected display manager: $display_manager"
+    # Configure serial console auto-login
+    print_info "Configuring serial console auto-login for ttyAMA0..."
+    mkdir -p /etc/systemd/system/serial-getty@ttyAMA0.service.d/
+    tee /etc/systemd/system/serial-getty@ttyAMA0.service.d/autologin.conf > /dev/null << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $USERNAME --noclear %I \$TERM
+EOF
     
-    # Configure based on detected display manager
-    case "$display_manager" in
-        gdm3)
-            if configure_gdm3; then
-                print_info "Auto-login configuration completed successfully!"
-                print_info "Please reboot the system for changes to take effect."
-                exit 0
-            else
-                print_error "Failed to configure GDM3"
-                exit 1
-            fi
-            ;;
-        lightdm)
-            if configure_lightdm; then
-                print_info "Auto-login configuration completed successfully!"
-                print_info "Please reboot the system for changes to take effect."
-                exit 0
-            else
-                print_error "Failed to configure LightDM"
-                exit 1
-            fi
-            ;;
-        *)
-            print_error "Unexpected error: Unknown display manager"
-            exit 1
-            ;;
-    esac
+    print_info "Systemd configuration created"
+    
+    # Copy start-coremodel.sh to user home directory
+    print_info "Copying start-coremodel.sh to $USER_HOME..."
+    print_info "Script directory: $SCRIPT_DIR"
+    print_info "Looking for: $SCRIPT_DIR/start-coremodel.sh"
+    
+    if [ ! -f "$SCRIPT_DIR/start-coremodel.sh" ]; then
+        print_error "start-coremodel.sh NOT FOUND at $SCRIPT_DIR/start-coremodel.sh"
+        print_error "Directory contents:"
+        ls -la "$SCRIPT_DIR/" | head -20
+        print_warning "Skipping start-coremodel.sh copy - you'll need to place it manually"
+    else
+        print_info "✓ Found start-coremodel.sh"
+        cp "$SCRIPT_DIR/start-coremodel.sh" "$USER_HOME/"
+        chmod +x "$USER_HOME/start-coremodel.sh"
+        chown $USERNAME:$USERNAME "$USER_HOME/start-coremodel.sh"
+        print_info "✅ start-coremodel.sh copied to $USER_HOME/"
+    fi
+    
+    # Setup .bash_profile with auto-start loop
+    print_info "Configuring .bash_profile for auto-start..."
+    sudo tee "$USER_HOME/.bash_profile" > /dev/null << 'EOF'
+# Auto-start coremodel on login
+while true; do
+    /home/user/start-coremodel.sh
+done
+EOF
+    
+    chown $USERNAME:$USERNAME "$USER_HOME/.bash_profile"
+    chmod 644 "$USER_HOME/.bash_profile"
+    
+    print_info "✅ Auto-login configuration completed successfully!"
+    print_info ""
+    print_info "Configuration summary:"
+    print_info "  - Serial console (ttyAMA0) will auto-login as '$USERNAME'"
+    print_info "  - start-coremodel.sh copied to $USER_HOME/"
+    print_info "  - .bash_profile configured to run start-coremodel.sh in a loop"
+    print_info ""
+    print_info "Reloading systemd and restarting serial console service..."
+    systemctl daemon-reload
+    systemctl restart serial-getty@ttyAMA0 || true
+    print_info "The script will start automatically on next login to serial console"
 }
 
 # Run main function
 main "$@"
-

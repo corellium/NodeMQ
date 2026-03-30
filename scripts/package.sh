@@ -4,6 +4,9 @@
 
 set -e
 
+# Change to project root directory
+cd "$(dirname "$0")/.."
+
 VERSION=$(node -p "require('./package.json').version")
 PACKAGE_NAME="sensor-service-${VERSION}"
 COREMODEL_LIVE="../PeripheralBuilder/coremodel-master/coremodel-ADI-Demo"
@@ -36,6 +39,14 @@ cp README.md "${PACKAGE_NAME}/" 2>/dev/null || true
 cp scripts/install.sh "${PACKAGE_NAME}/"
 chmod +x "${PACKAGE_NAME}/install.sh"
 
+# Copy start-coremodel script
+cp scripts/start-coremodel.sh "${PACKAGE_NAME}/"
+chmod +x "${PACKAGE_NAME}/start-coremodel.sh"
+
+# Copy setup-autologin script
+cp scripts/setup-autologin.sh "${PACKAGE_NAME}/"
+chmod +x "${PACKAGE_NAME}/setup-autologin.sh"
+
 # Copy existing config if present
 if [ -f "config.json" ]; then
   cp config.json "${PACKAGE_NAME}/"
@@ -48,11 +59,13 @@ rm -rf "${PACKAGE_NAME}"
 echo ""
 echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
 echo "   Deployment package containing:"
-echo "     dist/          — Compiled NodeMQ service"
-echo "     package.json   — Dependencies"
-echo "     config.json    — Service configuration"
-echo "     install.sh     — Installation script"
-echo "     README.md      — Documentation"
+echo "     dist/                — Compiled NodeMQ service"
+echo "     package.json         — Dependencies"
+echo "     config.json          — Service configuration"
+echo "     install.sh           — Installation script"
+echo "     start-coremodel.sh   — Coremodel startup script"
+echo "     setup-autologin.sh   — Serial console auto-login setup"
+echo "     README.md            — Documentation"
 echo ""
 echo "   Deploy:"
 echo "     scp ${PACKAGE_NAME}.tar.gz root@<device-ip>:/tmp/"

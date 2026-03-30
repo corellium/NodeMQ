@@ -41,6 +41,24 @@ npm start
 
 The service starts on port 3000 by default.
 
+### Building a Deployment Package
+
+To create a deployment tarball for production:
+
+```bash
+# Run the package script from the project root
+bash scripts/package.sh
+```
+
+This creates `sensor-service-<version>.tar.gz` containing:
+- Compiled service (`dist/`)
+- Dependencies (`package.json`, `package-lock.json`)
+- Configuration (`config.json`)
+- Installation scripts (`install.sh`, `setup-autologin.sh`, `start-coremodel.sh`)
+- Documentation (`README.md`)
+
+The package is ready to deploy to any Linux server.
+
 ## Complete Deployment Guide
 
 This section covers the full deployment workflow from packaging to running the complete system with the CoreModel peripheral binary.

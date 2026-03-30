@@ -6,6 +6,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "🚀 Installing Sensor Subscription Service..."
 
+# Install system dependencies
+echo "📦 Installing system dependencies..."
+sudo apt update
+sudo apt install -y gcc make build-essential git npm nodejs
+
+echo "✅ System dependencies installed"
+
 # Stop service if running
 if systemctl is-active --quiet sensor-service; then
     echo "⏸️  Stopping sensor-service..."
