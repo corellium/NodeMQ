@@ -55,6 +55,7 @@ This creates `sensor-service-<version>.tar.gz` containing:
 - Dependencies (`package.json`, `package-lock.json`)
 - Configuration (`config.json`)
 - Installation scripts (`install.sh`, `setup-autologin.sh`, `start-coremodel.sh`)
+- Shutdown cleanup scripts (`install-cleanup-service.sh`, `cleanup-sensor-data.sh`)
 - Documentation (`README.md`)
 
 The package is ready to deploy to any Linux server.
@@ -75,6 +76,7 @@ The `package.sh` script creates a deployment tarball containing:
 - Node.js dependencies (`package.json`, `package-lock.json`)
 - Service configuration (`config.json`)
 - Documentation (`README.md`)
+- Shutdown cleanup scripts (`install-cleanup-service.sh`, `cleanup-sensor-data.sh`)
 
 ```bash
 # From the NodeMQ project root
@@ -162,6 +164,25 @@ sudo systemctl start sensor-service
 
 # Check status
 sudo systemctl status sensor-service
+```
+
+### Step 2b: Install Shutdown Cleanup Service
+
+The sensor service persists telemetry messages to `/opt/sensor-service/data/`. To automatically clean this data on every shutdown or reboot, install the cleanup service:
+
+```bash
+# From the extracted package directory
+sudo bash install-cleanup-service.sh
+```
+
+This installs a systemd oneshot service (`sensor-data-cleanup.service`) that runs `cleanup-sensor-data.sh` during shutdown/reboot, removing all contents of `/opt/sensor-service/data/` (including the `messages/` folder). This prevents stale telemetry data from accumulating across reboots.
+
+```bash
+# Verify the service is enabled
+systemctl is-enabled sensor-data-cleanup
+
+# Check service status
+systemctl status sensor-data-cleanup
 ```
 
 ### Step 3: Run the CoreModel Peripheral Binary
@@ -684,6 +705,17 @@ journalctl -u sensor-service -f
 journalctl -u sensor-service -n 100
 ```
 
+The shutdown cleanup service (`sensor-data-cleanup.service`) runs automatically and requires no manual management. To check its status or disable it:
+
+```bash
+# Check cleanup service
+systemctl status sensor-data-cleanup
+systemctl is-enabled sensor-data-cleanup
+
+# Disable if you want to preserve data across reboots
+systemctl disable sensor-data-cleanup
+```
+
 ### Manual Deployment
 
 For manual deployment without the package script:
@@ -732,6 +764,13 @@ Docker support is planned for future releases.
 │   ├── SUBSCRIPTION-ARCHITECTURE.md
 │   ├── sensor-dashboard.html
 │   └── sensor-metrics.html
+├── scripts/                        # Deployment and utility scripts
+│   ├── package.sh                  # Build deployment tarball
+│   ├── install.sh                  # Service installation
+│   ├── setup-autologin.sh          # Serial console auto-login
+│   ├── start-coremodel.sh          # CoreModel startup helper
+│   ├── install-cleanup-service.sh  # Installs shutdown cleanup systemd service
+│   └── cleanup-sensor-data.sh      # Deletes telemetry data in /opt/sensor-service/data/
 ├── config.json                     # Service configuration
 └── package.json
 ```
