@@ -47,6 +47,12 @@ chmod +x "${PACKAGE_NAME}/start-coremodel.sh"
 cp scripts/setup-autologin.sh "${PACKAGE_NAME}/"
 chmod +x "${PACKAGE_NAME}/setup-autologin.sh"
 
+# Copy cleanup scripts
+cp scripts/install-cleanup-service.sh "${PACKAGE_NAME}/"
+chmod +x "${PACKAGE_NAME}/install-cleanup-service.sh"
+cp scripts/cleanup-sensor-data.sh "${PACKAGE_NAME}/"
+chmod +x "${PACKAGE_NAME}/cleanup-sensor-data.sh"
+
 # Copy existing config if present
 if [ -f "config.json" ]; then
   cp config.json "${PACKAGE_NAME}/"
@@ -65,6 +71,8 @@ echo "     config.json          — Service configuration"
 echo "     install.sh           — Installation script"
 echo "     start-coremodel.sh   — Coremodel startup script"
 echo "     setup-autologin.sh   — Serial console auto-login setup"
+echo "     install-cleanup-service.sh — Shutdown cleanup service installer"
+echo "     cleanup-sensor-data.sh     — Telemetry data cleanup script"
 echo "     README.md            — Documentation"
 echo ""
 echo "   Deploy:"

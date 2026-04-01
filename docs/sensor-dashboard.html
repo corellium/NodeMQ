@@ -3,130 +3,367 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sensor Telemetry Dashboard</title>
+  <title>Sensor Telemetry Oscilloscope</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a14; color: #eee; min-height: 100vh; }
-    .container { max-width: 1600px; margin: 0 auto; padding: 16px; }
-    h1 { color: #00d9ff; margin-bottom: 16px; font-size: 1.4rem; }
-    .top-bar { display: grid; grid-template-columns: 320px 1fr auto; gap: 12px; margin-bottom: 16px; align-items: start; }
-    .card { background: #12122a; border-radius: 8px; padding: 14px; }
-    .card h2 { color: #00d9ff; margin-bottom: 10px; font-size: 0.95rem; }
-    label { display: block; margin-bottom: 4px; color: #888; font-size: 0.85rem; }
-    input, select { width: 100%; padding: 8px; border: 1px solid #2a2a4a; border-radius: 4px; background: #0a0a14; color: #eee; margin-bottom: 10px; font-size: 0.85rem; }
-    button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px; margin-bottom: 8px; font-size: 0.85rem; }
-    .btn-primary { background: #00d9ff; color: #000; }
-    .btn-danger { background: #ff4757; color: #fff; }
-    .btn-success { background: #2ed573; color: #000; }
-    .btn-small { padding: 4px 8px; font-size: 0.75rem; }
-    .btn-ghost { background: #2a2a4a; color: #aaa; }
-    .status { padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.85rem; }
-    .status.connected { background: #2ed57322; color: #2ed573; }
-    .status.disconnected { background: #ff475722; color: #ff4757; }
-    .subscriptions { display: flex; flex-wrap: wrap; gap: 6px; }
-    .sub-tag { background: #00d9ff22; color: #00d9ff; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
-    .sub-tag button { padding: 1px 5px; margin: 0; font-size: 0.75rem; }
-    .log { background: #0a0a14; border-radius: 4px; padding: 8px; height: 120px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; }
-    .log-entry { padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
-    .log-entry.error { color: #ff4757; }
-    .log-entry.success { color: #2ed573; }
-    .log-entry .time { color: #555; }
-    .scope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 12px; margin-top: 16px; }
-    .scope-panel { background: #0d0d1f; border-radius: 8px; padding: 12px; border: 1px solid #1e1e3a; }
-    .scope-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .scope-title { color: #00d9ff; font-size: 0.9rem; font-weight: 600; }
-    .scope-meta { color: #555; font-size: 0.75rem; }
-    .scope-stats { color: #888; font-size: 0.75rem; margin-bottom: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
-    canvas.scope { width: 100%; height: 160px; display: block; background: #050510; border-radius: 4px; border: 1px solid #1a1a2e; }
-    .scope-latest { color: #2ed573; font-size: 0.8rem; margin-top: 4px; font-family: monospace; }
-    .spi-panel { background: #0d0d1f; border-radius: 8px; padding: 12px; border: 1px solid #1e1e3a; }
-    .spi-log { background: #0a0a14; border-radius: 4px; padding: 8px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; margin-top: 6px; }
-    .spi-entry { padding: 2px 0; border-bottom: 1px solid #1a1a2e; white-space: nowrap; }
-    .spi-entry.spi-read  { color: #a29bfe; }
-    .spi-entry.spi-write { color: #fd79a8; }
-    .spi-entry .time { color: #555; }
-    .topics-panel { margin-top: 16px; }
-    .topic-item { background: #0a0a14; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-    .topic-item .info { flex: 1; }
-    .topic-item .topic { color: #00d9ff; font-family: monospace; font-size: 0.8rem; }
-    .topic-item .details { color: #555; font-size: 0.72rem; margin-top: 2px; }
-    .topic-item.active { border-left: 3px solid #2ed573; }
-    .pattern-list { display: flex; flex-wrap: wrap; gap: 6px; }
-    .pattern-tag { background: #2ed57322; color: #2ed573; padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; font-family: monospace; cursor: pointer; }
-    .pattern-tag:hover { background: #2ed57344; }
-    .filters { display: flex; gap: 8px; margin-bottom: 10px; }
+    body {
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      background: #050508;
+      color: #c0c0c0;
+      min-height: 100vh;
+    }
+    .container { max-width: 1800px; margin: 0 auto; padding: 12px; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; margin-bottom: 12px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+      border: 1px solid #2a2a4a; border-radius: 6px;
+    }
+    .header-title {
+      font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700;
+      color: #00ff88; text-shadow: 0 0 10px #00ff8866;
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    .header-status {
+      display: flex; align-items: center; gap: 16px; font-size: 0.78rem;
+    }
+    .header-status .led {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 4px;
+    }
+    .led-on { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+    .led-off { background: #442222; box-shadow: 0 0 3px #44222288; }
+    .led-warn { background: #ffaa00; box-shadow: 0 0 6px #ffaa00; }
+    .nav-link {
+      color: #00aaff; text-decoration: none; font-size: 0.78rem;
+      padding: 4px 10px; border: 1px solid #00aaff33; border-radius: 3px;
+    }
+    .nav-link:hover { background: #00aaff11; }
+
+    /* Control Panel */
+    .control-rack {
+      display: grid; grid-template-columns: 280px 1fr auto; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .panel {
+      background: linear-gradient(180deg, #141428 0%, #0c0c1a 100%);
+      border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px;
+      position: relative;
+    }
+    .panel::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, #ffffff15, transparent);
+    }
+    .panel-label {
+      font-family: 'Orbitron', sans-serif; font-size: 0.65rem; font-weight: 600;
+      color: #888; letter-spacing: 1.5px; text-transform: uppercase;
+      margin-bottom: 8px; padding-bottom: 4px;
+      border-bottom: 1px solid #ffffff08;
+    }
+    label { display: block; margin-bottom: 3px; color: #666; font-size: 0.75rem; letter-spacing: 0.5px; }
+    input, select {
+      width: 100%; padding: 6px 8px;
+      border: 1px solid #333; border-radius: 3px;
+      background: #0a0a14; color: #00ff88;
+      font-family: 'Share Tech Mono', monospace; font-size: 0.8rem;
+      margin-bottom: 8px;
+    }
+    input:focus, select:focus { outline: none; border-color: #00ff8866; box-shadow: 0 0 4px #00ff8822; }
+    button {
+      padding: 5px 12px; border: 1px solid #333; border-radius: 3px;
+      cursor: pointer; font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem; font-weight: 600; margin-right: 6px; margin-bottom: 4px;
+      transition: all 0.15s;
+    }
+    .btn-connect {
+      background: linear-gradient(180deg, #1a3a2a, #0a2a1a); color: #00ff88;
+      border-color: #00ff8844;
+    }
+    .btn-connect:hover { background: #0a3a2a; box-shadow: 0 0 8px #00ff8833; }
+    .btn-disconnect {
+      background: linear-gradient(180deg, #3a1a1a, #2a0a0a); color: #ff4444;
+      border-color: #ff444444;
+    }
+    .btn-disconnect:hover { background: #3a1a1a; box-shadow: 0 0 8px #ff444433; }
+    .btn-sub {
+      background: linear-gradient(180deg, #1a2a3a, #0a1a2a); color: #00aaff;
+      border-color: #00aaff44;
+    }
+    .btn-sub:hover { background: #0a2a3a; box-shadow: 0 0 8px #00aaff33; }
+    .btn-ghost {
+      background: #111; color: #666; border-color: #333;
+    }
+    .btn-ghost:hover { color: #aaa; border-color: #555; }
+    .btn-sm { padding: 2px 8px; font-size: 0.7rem; }
+
+    /* Status indicators */
+    .conn-status {
+      padding: 4px 8px; border-radius: 3px; font-size: 0.75rem;
+      margin-bottom: 8px; display: inline-block;
+    }
+    .conn-status.on { background: #00ff8815; color: #00ff88; border: 1px solid #00ff8833; }
+    .conn-status.off { background: #ff444415; color: #ff4444; border: 1px solid #ff444433; }
+
+    /* Subscriptions */
+    .sub-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sub-tag {
+      background: #00aaff11; color: #00aaff; border: 1px solid #00aaff33;
+      padding: 2px 6px; border-radius: 3px; font-size: 0.7rem;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .sub-tag button { padding: 0 3px; margin: 0; border: none; background: none; color: #ff4444; font-size: 0.7rem; cursor: pointer; }
+    .pattern-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pattern-tag {
+      background: #00ff8811; color: #00ff88; border: 1px solid #00ff8822;
+      padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; cursor: pointer;
+    }
+    .pattern-tag:hover { background: #00ff8822; }
+
+    /* Event log */
+    .event-log {
+      background: #060610; border: 1px solid #1a1a2e; border-radius: 3px;
+      padding: 6px; height: 100px; overflow-y: auto; font-size: 0.7rem;
+    }
+    .log-entry { padding: 1px 0; border-bottom: 1px solid #0a0a18; }
+    .log-entry.error { color: #ff4444; }
+    .log-entry.success { color: #00ff88; }
+    .log-entry .time { color: #444; }
+
+    /* Counters */
+    .counter-row {
+      display: flex; gap: 12px; margin-top: 8px;
+      padding: 6px 8px; background: #060610; border-radius: 3px; border: 1px solid #1a1a2e;
+    }
+    .counter { font-size: 0.75rem; }
+    .counter .val { color: #00ff88; font-weight: 600; }
+    .counter .lbl { color: #555; }
+
+    /* Topics panel */
+    .topics-section {
+      margin-bottom: 12px;
+      background: linear-gradient(180deg, #141428 0%, #0c0c1a 100%);
+      border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px;
+    }
+    .topics-section .panel-label { margin-bottom: 6px; }
+    .filters { display: flex; gap: 6px; margin-bottom: 8px; }
     .filters select { margin-bottom: 0; flex: 1; }
-    .topic-count { background: #00d9ff22; color: #00d9ff; border-radius: 10px; padding: 1px 7px; font-size: 0.72rem; margin-left: 6px; }
-    .empty-scope { color: #333; text-align: center; padding: 40px; font-size: 0.85rem; grid-column: 1/-1; }
-    .type-badge { padding: 1px 6px; border-radius: 3px; font-size: 0.72rem; font-family: monospace; font-weight: 600; margin-left: 4px; }
+    .topic-item {
+      background: #060610; border: 1px solid #1a1a2e; border-radius: 3px;
+      padding: 6px 8px; margin-bottom: 4px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .topic-item .info { flex: 1; }
+    .topic-item .topic { color: #00aaff; font-size: 0.72rem; }
+    .topic-item .details { color: #444; font-size: 0.65rem; margin-top: 1px; }
+    .topic-item.active { border-left: 2px solid #00ff88; }
+    .topic-count {
+      background: #00aaff15; color: #00aaff; border-radius: 8px;
+      padding: 0 6px; font-size: 0.65rem; margin-left: 6px;
+    }
+
+    /* Raw dump */
+    .dump-section {
+      margin-bottom: 12px;
+      background: linear-gradient(180deg, #141428 0%, #0c0c1a 100%);
+      border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px;
+    }
+    .dump-log {
+      background: #060610; border: 1px solid #1a1a2e; border-radius: 3px;
+      padding: 6px; height: 140px; overflow-y: auto; font-size: 0.65rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       OSCILLOSCOPE DISPLAY
+       ═══════════════════════════════════════════════════════ */
+    .scope-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+      gap: 10px; margin-top: 12px;
+    }
+
+    /* CRT Bezel */
+    .scope-bezel {
+      background: linear-gradient(145deg, #1a1a28 0%, #0e0e18 50%, #141422 100%);
+      border-radius: 8px; padding: 2px;
+      border: 1px solid #2a2a4a;
+      box-shadow: inset 0 1px 0 #ffffff08, 0 2px 12px #00000080;
+    }
+    .scope-inner {
+      background: #0a0a14; border-radius: 6px; padding: 10px;
+      position: relative;
+    }
+
+    /* Scope header bar */
+    .scope-hdr {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px; padding-bottom: 4px;
+      border-bottom: 1px solid #ffffff06;
+    }
+    .scope-ch {
+      font-family: 'Orbitron', sans-serif; font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .scope-src { color: #555; font-size: 0.65rem; }
+    .type-badge {
+      padding: 1px 5px; border-radius: 2px; font-size: 0.6rem;
+      font-weight: 600; margin-left: 4px; letter-spacing: 0.5px;
+    }
+
+    /* Readout bar above trace */
+    .scope-readout {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      font-size: 0.68rem; color: #888; margin-bottom: 4px;
+      padding: 3px 6px; background: #06060e; border-radius: 2px;
+      border: 1px solid #111;
+    }
+    .scope-readout .r-val { font-weight: 600; }
+
+    /* Canvas wrapper - the CRT screen */
+    .scope-screen {
+      position: relative; border-radius: 4px; overflow: hidden;
+      border: 1px solid #1e1e30;
+      box-shadow: inset 0 0 30px #00000060;
+    }
+    canvas.scope-canvas {
+      width: 100%; height: 220px; display: block;
+      background: #020208;
+    }
+    /* Scanline overlay */
+    .scope-screen::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        #00000018 2px,
+        #00000018 4px
+      );
+    }
+    /* Corner vignette */
+    .scope-screen::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 60%, #00000040 100%);
+      z-index: 1;
+    }
+
+    /* Measurement readout below trace */
+    .scope-meas {
+      font-size: 0.72rem; margin-top: 4px; padding: 3px 6px;
+      background: #06060e; border-radius: 2px; border: 1px solid #111;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .scope-meas .m-live { color: #00ff88; }
+    .scope-meas .m-raw { color: #666; font-size: 0.65rem; }
+
+    /* SPI Panel */
+    .spi-bezel {
+      background: linear-gradient(145deg, #1a1a28 0%, #0e0e18 50%, #141422 100%);
+      border-radius: 8px; padding: 2px;
+      border: 1px solid #2a2a4a;
+      box-shadow: inset 0 1px 0 #ffffff08, 0 2px 12px #00000080;
+    }
+    .spi-inner { background: #0a0a14; border-radius: 6px; padding: 10px; }
+    .spi-log {
+      background: #020208; border: 1px solid #1e1e30; border-radius: 4px;
+      padding: 6px; height: 180px; overflow-y: auto; font-size: 0.7rem; margin-top: 6px;
+    }
+    .spi-entry { padding: 1px 0; border-bottom: 1px solid #0a0a14; white-space: nowrap; }
+    .spi-entry.spi-read  { color: #aa88ff; }
+    .spi-entry.spi-write { color: #ff6688; }
+    .spi-entry .time { color: #333; }
+
+    .empty-scope {
+      color: #2a2a3a; text-align: center; padding: 60px 20px;
+      font-size: 0.85rem; grid-column: 1/-1;
+      border: 1px dashed #1a1a2e; border-radius: 8px;
+    }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>📡 Sensor Telemetry Dashboard</h1>
-  <div style="margin-bottom: 16px;">
-    <a href="sensor-metrics.html" style="color: #00d9ff; text-decoration: none; padding: 8px 12px; border-radius: 4px; background: #12122a; display: inline-block;">
-      📊 View Service Metrics
-    </a>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">⎍ Sensor Telemetry Oscilloscope</div>
+    <div class="header-status">
+      <span><span class="led led-off" id="connLed"></span> <span id="connLabel">OFFLINE</span></span>
+      <span class="counter"><span class="lbl">RX:</span> <span class="val" id="receivedCount">0</span></span>
+      <span class="counter"><span class="lbl">CH:</span> <span class="val" id="traceCount">0</span></span>
+      <a href="sensor-metrics.html" class="nav-link">Metrics →</a>
+    </div>
   </div>
-  <div class="top-bar">
-    <div class="card">
-      <h2>Connection</h2>
+
+  <!-- Control Rack -->
+  <div class="control-rack">
+    <div class="panel">
+      <div class="panel-label">Connection</div>
       <label>Service URL</label>
       <input type="text" id="serviceUrl" placeholder="http://10.11.0.1:3000" />
-      <div id="connectionStatus" class="status disconnected">Disconnected</div>
-      <button class="btn-primary" onclick="connect()">Connect</button>
-      <button class="btn-danger" onclick="disconnect()">Disconnect</button>
+      <div>
+        <span id="connectionStatus" class="conn-status off">Disconnected</span>
+      </div>
+      <button class="btn-connect" onclick="connect()">▶ Connect</button>
+      <button class="btn-disconnect" onclick="disconnect()">■ Stop</button>
     </div>
-    <div class="card">
-      <h2>Subscribe</h2>
+    <div class="panel">
+      <div class="panel-label">Subscribe</div>
       <label>Topic Pattern</label>
       <input type="text" id="topicInput" placeholder="sensors/#" />
-      <button class="btn-success" onclick="subscribe()">Subscribe</button>
-      <div id="subscriptions" class="subscriptions"><span style="color:#555">None</span></div>
-      <div style="margin-top:10px">
-        <label>Suggested</label>
-        <div id="suggestedPatterns" class="pattern-list"><span style="color:#555">Connect first</span></div>
+      <button class="btn-sub" onclick="subscribe()">+ Subscribe</button>
+      <div id="subscriptions" class="sub-tags" style="margin-top:4px"><span style="color:#333">—</span></div>
+      <div style="margin-top:8px">
+        <label>Quick Patterns</label>
+        <div id="suggestedPatterns" class="pattern-list"><span style="color:#333">connect first</span></div>
       </div>
     </div>
-    <div class="card" style="min-width:200px">
-      <h2>Controls</h2>
-      <label>Window (points)</label>
-      <input type="number" id="windowSize" value="200" min="10" max="2000" style="margin-bottom:10px" />
-      <button class="btn-ghost btn-small" onclick="clearAll()">Clear All</button>
-      <div style="margin-top:10px;padding:8px;background:#0a0a14;border-radius:4px">
-        <div style="color:#2ed573;font-size:0.85rem;margin-bottom:4px">📊 Messages Received: <span id="receivedCount" style="font-weight:600">0</span></div>
-        <div style="color:#00d9ff;font-size:0.85rem">📈 Unique Traces: <span id="traceCount" style="font-weight:600">0</span></div>
-      </div>
-      <div style="margin-top:10px">
+    <div class="panel" style="min-width:200px">
+      <div class="panel-label">Controls</div>
+      <label>Window (pts)</label>
+      <input type="number" id="windowSize" value="200" min="10" max="2000" />
+      <label>Persistence</label>
+      <select id="persistenceMode">
+        <option value="none">Off</option>
+        <option value="fade" selected>Phosphor Fade</option>
+        <option value="infinite">Infinite</option>
+      </select>
+      <button class="btn-ghost btn-sm" onclick="clearAll()">⌫ Clear All</button>
+      <div style="margin-top:8px">
         <label>Event Log</label>
-        <div id="log" class="log"></div>
+        <div id="log" class="event-log"></div>
       </div>
     </div>
   </div>
-  <div class="topics-panel card">
-    <h2>Available Topics <span id="topicCount" class="topic-count">0</span>
-      <button class="btn-small btn-ghost" style="margin-left:8px" onclick="loadTopics()">↻ Refresh</button>
-      <label style="display:inline-flex;align-items:center;gap:6px;float:right;color:#666;font-size:0.8rem;font-weight:normal;margin:0">
+
+  <!-- Topics -->
+  <div class="topics-section">
+    <div class="panel-label">
+      Available Sensors <span id="topicCount" class="topic-count">0</span>
+      <button class="btn-ghost btn-sm" style="margin-left:6px" onclick="loadTopics()">↻</button>
+      <label style="display:inline-flex;align-items:center;gap:4px;float:right;color:#555;font-size:0.7rem;font-weight:normal;margin:0">
         <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()" style="width:auto;margin:0" /> Auto
       </label>
-    </h2>
+    </div>
     <div class="filters">
       <select id="filterModel" onchange="loadTopics()"><option value="">All Models</option></select>
       <select id="filterBus" onchange="loadTopics()"><option value="">All Buses</option></select>
       <select id="filterType" onchange="loadTopics()"><option value="">All Types</option></select>
     </div>
-    <div id="availableTopics"><div style="color:#555;padding:10px">Connect and refresh to see sensors</div></div>
-  </div>
-  <div class="card" style="margin-top:16px">
-    <h2>Raw Event Dump <span id="dumpCount" class="topic-count">0</span>
-      <button class="btn-small btn-ghost" style="margin-left:8px" onclick="clearDump()">Clear</button>
-    </h2>
-    <div id="dumpLog" class="log" style="height:200px;font-size:0.72rem"></div>
+    <div id="availableTopics"><div style="color:#333;padding:8px;font-size:0.75rem">Connect and refresh to discover sensors</div></div>
   </div>
 
+  <!-- Raw Dump -->
+  <div class="dump-section">
+    <div class="panel-label">
+      Raw Event Stream <span id="dumpCount" class="topic-count">0</span>
+      <button class="btn-ghost btn-sm" style="margin-left:6px" onclick="clearDump()">Clear</button>
+    </div>
+    <div id="dumpLog" class="dump-log"></div>
+  </div>
+
+  <!-- Scope Grid -->
   <div id="scopeGrid" class="scope-grid">
-    <div class="empty-scope">Connect and subscribe to topics to see telemetry data</div>
+    <div class="empty-scope">Connect and subscribe to begin acquisition</div>
   </div>
 </div>
 
@@ -134,7 +371,7 @@
   let eventSource = null;
   let clientId = null;
   let dumpCount = 0;
-  let receivedCount = 0; // Track messages received via SSE
+  let receivedCount = 0;
 
   function appendDump(data) {
     const el = document.getElementById('dumpLog');
@@ -154,24 +391,34 @@
   }
 
   const subscriptions = new Set();
-  const channels = new Map(); // key -> { data, points, canvas, ctx, color, units, channel, isSpi, spiRows }
+  const channels = new Map();
   const seenFingerprints = new Set();
   let autoRefreshTimer = null;
 
-  const COLORS = ['#00d9ff','#2ed573','#ffa502','#ff4757','#a29bfe','#fd79a8','#00cec9','#e17055','#74b9ff','#55efc4','#fdcb6e','#6c5ce7','#fab1a0'];
-
   const CHANNEL_COLORS = {
-    generate: '#00d9ff',
-    fifoPush: '#2ed573',
-    fifoPop:  '#ffa502',
-    spiRead:  '#a29bfe',
-    spiWrite: '#fd79a8',
-    debug:    '#888',
+    generate: { trace: '#00ff88', glow: '#00ff8844', dim: '#00ff8822', label: '#00ff88' },
+    fifoPush: { trace: '#00ddff', glow: '#00ddff44', dim: '#00ddff22', label: '#00ddff' },
+    fifoPop:  { trace: '#ffaa00', glow: '#ffaa0044', dim: '#ffaa0022', label: '#ffaa00' },
+    spiRead:  { trace: '#aa88ff', glow: '#aa88ff44', dim: '#aa88ff22', label: '#aa88ff' },
+    spiWrite: { trace: '#ff6688', glow: '#ff668844', dim: '#ff668822', label: '#ff6688' },
+    debug:    { trace: '#666666', glow: '#66666644', dim: '#66666622', label: '#666666' },
   };
+  const FALLBACK_COLORS = [
+    { trace: '#00ff88', glow: '#00ff8844', dim: '#00ff8822', label: '#00ff88' },
+    { trace: '#00ddff', glow: '#00ddff44', dim: '#00ddff22', label: '#00ddff' },
+    { trace: '#ffaa00', glow: '#ffaa0044', dim: '#ffaa0022', label: '#ffaa00' },
+    { trace: '#ff6688', glow: '#ff668844', dim: '#ff668822', label: '#ff6688' },
+    { trace: '#aa88ff', glow: '#aa88ff44', dim: '#aa88ff22', label: '#aa88ff' },
+    { trace: '#55ffcc', glow: '#55ffcc44', dim: '#55ffcc22', label: '#55ffcc' },
+  ];
+  let colorIdx = 0;
 
-  function channelColor(ch) { return CHANNEL_COLORS[ch] || COLORS[channels.size % COLORS.length]; }
+  function channelPalette(ch) {
+    return CHANNEL_COLORS[ch] || FALLBACK_COLORS[colorIdx++ % FALLBACK_COLORS.length];
+  }
   function getServiceUrl() { return document.getElementById('serviceUrl').value.trim(); }
   function getWindowSize() { return Math.max(10, parseInt(document.getElementById('windowSize').value) || 200); }
+  function getPersistence() { return document.getElementById('persistenceMode').value; }
 
   function log(msg, type = 'info') {
     const el = document.getElementById('log');
@@ -185,15 +432,18 @@
 
   function updateStatus(connected) {
     const el = document.getElementById('connectionStatus');
-    el.className = `status ${connected ? 'connected' : 'disconnected'}`;
-    el.textContent = connected ? `Connected (${clientId})` : 'Disconnected';
+    el.className = `conn-status ${connected ? 'on' : 'off'}`;
+    el.textContent = connected ? `Online · ${clientId}` : 'Disconnected';
+    const led = document.getElementById('connLed');
+    led.className = `led ${connected ? 'led-on' : 'led-off'}`;
+    document.getElementById('connLabel').textContent = connected ? 'ONLINE' : 'OFFLINE';
   }
 
   function renderSubscriptions() {
     const el = document.getElementById('subscriptions');
-    if (!subscriptions.size) { el.innerHTML = '<span style="color:#555">None</span>'; return; }
+    if (!subscriptions.size) { el.innerHTML = '<span style="color:#333">—</span>'; return; }
     el.innerHTML = Array.from(subscriptions).map(t =>
-      `<div class="sub-tag">${t}<button class="btn-danger" onclick="unsubscribe('${t}')">×</button></div>`
+      `<div class="sub-tag">${t}<button onclick="unsubscribe('${t}')">×</button></div>`
     ).join('');
   }
 
@@ -203,7 +453,6 @@
       return `${data.sensorId}:${data.sensorType}:${v.type||''}:${v.timestamp}:${v.measurement}`;
     }
     if (v && typeof v === 'object' && 'type' in v && 'timestamp' in v && 'address' in v) {
-      // SPI messages - include address and sensorType to avoid deduplication
       return `${data.sensorId}:${data.sensorType}:${v.type}:${v.address}:${v.timestamp}`;
     }
     if (v && typeof v === 'object' && 'type' in v && 'timestamp' in v) {
@@ -230,10 +479,10 @@
 
   function getOrCreateSpiPanel(key, data, channel) {
     if (channels.has(key)) return channels.get(key);
-    const color = channelColor(channel);
-    const ch = { key, data, color, channel, isSpi: true, spiRows: [] };
+    const pal = channelPalette(channel);
+    const ch = { key, data, palette: pal, channel, isSpi: true, spiRows: [] };
     channels.set(key, ch);
-    rebuildScopeGrid();
+    appendToGrid(ch);
     return ch;
   }
 
@@ -253,7 +502,6 @@
     const bytes = Array.isArray(v.bytes) ? v.bytes.map(b => parseByte(b).toString(16).padStart(2,'0')).join(' ') : '';
     const ts = v.timestamp ? new Date(v.timestamp).toLocaleTimeString() : '';
     const d = document.createElement('div');
-    // Use channel type from ch.channel (spiRead/spiWrite), not v.type (which is always "SPI")
     d.className = `spi-entry ${ch.channel === 'spiWrite' ? 'spi-write' : 'spi-read'}`;
     d.innerHTML = `<span class="time">[${ts}]</span> 0x${v.address||'??'} ${bytes}`;
     logEl.insertBefore(d, logEl.firstChild);
@@ -262,45 +510,54 @@
 
   function getOrCreateChannel(key, data, channel) {
     if (channels.has(key)) return channels.get(key);
-    const color = channelColor(channel);
-    const ch = { key, data, points: [], color, units: '', channel, isSpi: false };
+    const pal = channelPalette(channel);
+    const ch = { key, data, points: [], prevPoints: [], palette: pal, units: '', channel, isSpi: false };
     channels.set(key, ch);
-    rebuildScopeGrid();
+    appendToGrid(ch);
     return ch;
   }
 
-  function panelId(key)  { return 'panel-'  + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
-  function canvasId(key) { return 'canvas-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
-  function statsId(key)  { return 'stats-'  + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
-  function latestId(key) { return 'latest-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function panelId(key)   { return 'panel-'   + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function canvasId(key)  { return 'canvas-'  + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function readoutId(key) { return 'readout-' + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function measId(key)    { return 'meas-'    + key.replace(/[^a-zA-Z0-9_-]/g, '_'); }
 
   function rebuildScopeGrid() {
     const grid = document.getElementById('scopeGrid');
     grid.innerHTML = '';
     if (!channels.size) {
-      grid.innerHTML = '<div class="empty-scope">Connect and subscribe to topics to see telemetry data</div>';
+      grid.innerHTML = '<div class="empty-scope">Connect and subscribe to begin acquisition</div>';
       return;
     }
     for (const [key, ch] of channels) {
-      if (ch.isSpi) {
-        renderSpiPanel(grid, ch);
-      } else {
-        renderScopePanel(grid, ch);
-      }
+      if (ch.isSpi) renderSpiPanel(grid, ch);
+      else renderScopePanel(grid, ch);
     }
+  }
+
+  // Append a single panel without touching existing ones
+  function appendToGrid(ch) {
+    const grid = document.getElementById('scopeGrid');
+    // Remove the empty-state placeholder if present
+    const empty = grid.querySelector('.empty-scope');
+    if (empty) empty.remove();
+    if (ch.isSpi) renderSpiPanel(grid, ch);
+    else renderScopePanel(grid, ch);
   }
 
   function renderSpiPanel(grid, ch) {
     const panel = document.createElement('div');
-    panel.className = 'spi-panel';
+    panel.className = 'spi-bezel';
     panel.id = panelId(ch.key);
-    const chLabel = `<span class="type-badge" style="background:${ch.color}22;color:${ch.color}">${ch.channel}</span>`;
+    const pal = ch.palette;
     panel.innerHTML = `
-      <div class="scope-header">
-        <span class="scope-title" style="color:${ch.color}">SPI ${chLabel}</span>
-        <span class="scope-meta">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
-      </div>
-      <div class="spi-log" id="${spiLogId(ch.key)}"></div>`;
+      <div class="spi-inner">
+        <div class="scope-hdr">
+          <span class="scope-ch" style="color:${pal.label}">SPI <span class="type-badge" style="background:${pal.dim};color:${pal.label}">${ch.channel}</span></span>
+          <span class="scope-src">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
+        </div>
+        <div class="spi-log" id="${spiLogId(ch.key)}"></div>
+      </div>`;
     grid.appendChild(panel);
     const logEl = document.getElementById(spiLogId(ch.key));
     for (const v of ch.spiRows.slice().reverse()) {
@@ -315,87 +572,258 @@
 
   function renderScopePanel(grid, ch) {
     const panel = document.createElement('div');
-    panel.className = 'scope-panel';
+    panel.className = 'scope-bezel';
     panel.id = panelId(ch.key);
+    const pal = ch.palette;
     const chLabel = ch.channel
-      ? `<span class="type-badge" style="background:${ch.color}22;color:${ch.color}">${ch.channel}</span>`
+      ? `<span class="type-badge" style="background:${pal.dim};color:${pal.label}">${ch.channel}</span>`
       : '';
     const sensorTypeDisplay = Array.isArray(ch.data.sensorType) ? ch.data.sensorType.join(', ') : ch.data.sensorType;
     panel.innerHTML = `
-      <div class="scope-header">
-        <span class="scope-title" style="color:${ch.color}">${sensorTypeDisplay} ${chLabel}</span>
-        <span class="scope-meta">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
-      </div>
-      <div class="scope-stats" id="${statsId(ch.key)}">waiting for data...</div>
-      <canvas class="scope" id="${canvasId(ch.key)}"></canvas>
-      <div class="scope-latest" id="${latestId(ch.key)}"></div>`;
+      <div class="scope-inner">
+        <div class="scope-hdr">
+          <span class="scope-ch" style="color:${pal.label}">${sensorTypeDisplay} ${chLabel}</span>
+          <span class="scope-src">${ch.data.sourceModelId} · ${ch.data.sensorId}</span>
+        </div>
+        <div class="scope-readout" id="${readoutId(ch.key)}">
+          <span><span class="r-val" style="color:${pal.label}">—</span> pts</span>
+          <span>Min: <span class="r-val">—</span></span>
+          <span>Max: <span class="r-val">—</span></span>
+          <span>Δ: <span class="r-val">—</span></span>
+        </div>
+        <div class="scope-screen">
+          <canvas class="scope-canvas" id="${canvasId(ch.key)}"></canvas>
+        </div>
+        <div class="scope-meas" id="${measId(ch.key)}">
+          <span class="m-live">Acquiring...</span>
+          <span class="m-raw"></span>
+        </div>
+      </div>`;
     grid.appendChild(panel);
     const canvas = document.getElementById(canvasId(ch.key));
-    canvas.width = canvas.offsetWidth || 460;
-    canvas.height = 160;
+    canvas.width = canvas.offsetWidth || 540;
+    canvas.height = 220;
     ch.canvas = canvas;
     ch.ctx = canvas.getContext('2d');
   }
 
+  /* ═══════════════════════════════════════════════════════
+     OSCILLOSCOPE RENDERER
+     ═══════════════════════════════════════════════════════ */
   function drawScope(ch) {
     const canvas = ch.canvas;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.offsetWidth;
-    if (canvas.width !== w * dpr) { canvas.width = w * dpr; canvas.height = 160 * dpr; ch.ctx.scale(dpr, dpr); }
-    const W = canvas.offsetWidth, H = 160;
+    const H_CSS = 220;
+    if (canvas.width !== w * dpr || canvas.height !== H_CSS * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = H_CSS * dpr;
+      ch.ctx = canvas.getContext('2d');
+      ch.ctx.scale(dpr, dpr);
+    }
+    const W = w, H = H_CSS;
     const ctx = ch.ctx;
-    ctx.clearRect(0, 0, W, H);
+    const pal = ch.palette;
+    const persistence = getPersistence();
+
+    // Margins for axis labels
+    const ML = 52, MR = 12, MT = 8, MB = 20;
+    const gW = W - ML - MR, gH = H - MT - MB;
+
+    // Background
+    ctx.fillStyle = '#020208';
+    ctx.fillRect(0, 0, W, H);
+
+    // Graticule area background - subtle dark green tint
+    ctx.fillStyle = '#030810';
+    ctx.fillRect(ML, MT, gW, gH);
 
     const win = getWindowSize();
-    const pts = ch.points.slice(-win);
+    const pts = ch.points.slice(-win).sort((a, b) => a.x - b.x);
+
     if (pts.length < 2) {
-      ctx.fillStyle = '#333'; ctx.font = '12px monospace';
-      ctx.fillText(`waiting... (${ch.points.length} pts)`, W / 2 - 60, H / 2);
+      ctx.fillStyle = '#1a1a2a';
+      ctx.font = '11px "Share Tech Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`WAITING... (${ch.points.length} samples)`, W / 2, H / 2);
+      ctx.textAlign = 'left';
+      drawGraticule(ctx, ML, MT, gW, gH, pal);
       return;
     }
 
-    ctx.strokeStyle = '#1a1a3a'; ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) { const y = (H/4)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-    for (let i = 0; i <= 8; i++) { const x = (W/8)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-
+    // Compute ranges
     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
     const xMin = Math.min(...xs), xMax = Math.max(...xs);
-    const yMin = Math.min(...ys), yMax = Math.max(...ys);
-    const xRange = xMax - xMin || 1, yRange = yMax - yMin || 1;
-    const toX = x => ((x - xMin) / xRange) * (W - 20) + 10;
-    const toY = y => H - 10 - ((y - yMin) / yRange) * (H - 20);
+    let yMin = Math.min(...ys), yMax = Math.max(...ys);
+    // Add 5% padding to Y range
+    const yPad = (yMax - yMin) * 0.05 || 0.001;
+    yMin -= yPad; yMax += yPad;
+    const xRange = xMax - xMin || 1, yRange = yMax - yMin || 0.001;
 
+    const toX = x => ML + ((x - xMin) / xRange) * gW;
+    const toY = y => MT + gH - ((y - yMin) / yRange) * gH;
+
+    // Draw graticule
+    drawGraticule(ctx, ML, MT, gW, gH, pal);
+
+    // Zero line
     if (yMin < 0 && yMax > 0) {
-      ctx.strokeStyle = '#2a2a5a'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, toY(0)); ctx.lineTo(W, toY(0)); ctx.stroke();
+      const zy = toY(0);
+      ctx.strokeStyle = '#ffffff12';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(ML, zy); ctx.lineTo(ML + gW, zy); ctx.stroke();
+      ctx.setLineDash([]);
     }
 
-    ctx.strokeStyle = ch.color; ctx.lineWidth = 1.5;
-    ctx.shadowColor = ch.color; ctx.shadowBlur = 4;
+    // Phosphor persistence - draw previous trace faded
+    if (persistence === 'fade' && ch.prevPoints && ch.prevPoints.length > 1) {
+      drawTrace(ctx, ch.prevPoints, toX, toY, pal.trace, 0.15, 1.0, 0);
+    }
+
+    // Store current points for next frame's persistence
+    if (persistence === 'fade') {
+      ch.prevPoints = pts.slice();
+    }
+
+    // Main trace with glow
+    drawTrace(ctx, pts, toX, toY, pal.trace, 1.0, 2.0, 8);
+    // Bright core
+    drawTrace(ctx, pts, toX, toY, '#ffffff', 0.4, 1.0, 0);
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '9px "Share Tech Mono", monospace';
+    ctx.textAlign = 'right';
+    const yDivs = 8;
+    for (let i = 0; i <= yDivs; i++) {
+      const val = yMax - (i / yDivs) * yRange;
+      const yy = MT + (i / yDivs) * gH;
+      ctx.fillText(formatValue(val), ML - 4, yy + 3);
+    }
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    const xDivs = 10;
+    for (let i = 0; i <= xDivs; i += 2) {
+      const val = xMin + (i / xDivs) * xRange;
+      const xx = ML + (i / xDivs) * gW;
+      ctx.fillText(val.toFixed(1) + 's', xx, H - 4);
+    }
+
+    // Time/div and V/div indicators
+    ctx.textAlign = 'left';
+    ctx.fillStyle = pal.label;
+    ctx.font = '9px "Share Tech Mono", monospace';
+    const timeDiv = (xRange / xDivs).toFixed(3);
+    const vDiv = (yRange / yDivs);
+    ctx.fillText(`T: ${timeDiv}s/div`, ML + 4, H - 4);
+    ctx.textAlign = 'right';
+    ctx.fillText(`V: ${formatValue(vDiv)}/div ${ch.units}`, ML + gW - 4, H - 4);
+    ctx.textAlign = 'left';
+
+    // Update readout
+    updateReadout(ch, pts, yMin, yMax);
+  }
+
+  function drawGraticule(ctx, x0, y0, w, h, pal) {
+    const xDivs = 10, yDivs = 8;
+
+    // Major grid lines
+    ctx.strokeStyle = '#ffffff0a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= yDivs; i++) {
+      const y = y0 + (i / yDivs) * h;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + w, y); ctx.stroke();
+    }
+    for (let i = 0; i <= xDivs; i++) {
+      const x = x0 + (i / xDivs) * w;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y0 + h); ctx.stroke();
+    }
+
+    // Center crosshair - brighter
+    ctx.strokeStyle = '#ffffff15';
+    ctx.lineWidth = 1;
+    const cx = x0 + w / 2, cy = y0 + h / 2;
+    ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0 + w, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, y0); ctx.lineTo(cx, y0 + h); ctx.stroke();
+
+    // Tick marks on center lines (every 1/5 of a division)
+    ctx.strokeStyle = '#ffffff18';
+    const tickLen = 3;
+    for (let i = 0; i <= xDivs * 5; i++) {
+      const x = x0 + (i / (xDivs * 5)) * w;
+      ctx.beginPath(); ctx.moveTo(x, cy - tickLen); ctx.lineTo(x, cy + tickLen); ctx.stroke();
+    }
+    for (let i = 0; i <= yDivs * 5; i++) {
+      const y = y0 + (i / (yDivs * 5)) * h;
+      ctx.beginPath(); ctx.moveTo(cx - tickLen, y); ctx.lineTo(cx + tickLen, y); ctx.stroke();
+    }
+
+    // Border
+    ctx.strokeStyle = '#2a2a4a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, w, h);
+  }
+
+  function drawTrace(ctx, pts, toX, toY, color, alpha, lineWidth, blur) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    if (blur > 0) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = blur;
+    }
     ctx.beginPath();
-    pts.forEach((p, i) => { const px = toX(p.x), py = toY(p.y); i === 0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py); });
-    ctx.stroke(); ctx.shadowBlur = 0;
-
-    ctx.fillStyle = ch.color;
-    pts.forEach(p => { ctx.beginPath(); ctx.arc(toX(p.x), toY(p.y), 2.5, 0, Math.PI*2); ctx.fill(); });
-
-    ctx.fillStyle = '#555'; ctx.font = '10px monospace';
-    ctx.fillText(yMax.toFixed(2), 2, 12);
-    ctx.fillText(yMin.toFixed(2), 2, H - 4);
-    ctx.fillText(xMin.toFixed(1)+'s', 10, H - 4);
-    ctx.fillText(xMax.toFixed(1)+'s', W - 50, H - 4);
-
-    const statsEl = document.getElementById(statsId(ch.key));
-    if (statsEl) {
-      const latest = pts[pts.length - 1];
-      statsEl.textContent = `n=${ch.points.length}  min=${yMin.toFixed(4)}  max=${yMax.toFixed(4)}  latest=${latest.y.toFixed(4)} ${ch.units}`;
+    for (let i = 0; i < pts.length; i++) {
+      const px = toX(pts[i].x), py = toY(pts[i].y);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
     }
-    const latestEl = document.getElementById(latestId(ch.key));
-    if (latestEl) {
-      const p = pts[pts.length - 1];
-      const sv = p.sampleValue !== undefined ? `  raw=0x${p.sampleValue.toString(16).padStart(6,'0')}` : '';
-      latestEl.textContent = `▶ ${p.y.toFixed(6)} ${ch.units}  @${p.x.toFixed(3)}s${sv}`;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function formatValue(v) {
+    const abs = Math.abs(v);
+    if (abs === 0) return '0';
+    if (abs >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (abs >= 1e3) return (v / 1e3).toFixed(2) + 'k';
+    if (abs >= 1) return v.toFixed(3);
+    if (abs >= 1e-3) return (v * 1e3).toFixed(2) + 'm';
+    if (abs >= 1e-6) return (v * 1e6).toFixed(2) + 'µ';
+    return v.toExponential(2);
+  }
+
+  function updateReadout(ch, pts, yMin, yMax) {
+    const pal = ch.palette;
+    const latest = pts[pts.length - 1];
+    const yRange = yMax - yMin;
+    const mean = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+
+    const readoutEl = document.getElementById(readoutId(ch.key));
+    if (readoutEl) {
+      readoutEl.innerHTML = `
+        <span><span class="r-val" style="color:${pal.label}">${ch.points.length}</span> pts</span>
+        <span>Min: <span class="r-val" style="color:#00aaff">${formatValue(yMin)}</span></span>
+        <span>Max: <span class="r-val" style="color:#ff6666">${formatValue(yMax)}</span></span>
+        <span>Δ: <span class="r-val" style="color:#ffaa00">${formatValue(yRange)}</span></span>
+        <span>μ: <span class="r-val" style="color:#aa88ff">${formatValue(mean)}</span></span>
+        <span>${ch.units}</span>
+      `;
+    }
+
+    const measEl = document.getElementById(measId(ch.key));
+    if (measEl) {
+      const sv = latest.sampleValue !== undefined ? `raw=0x${latest.sampleValue.toString(16).padStart(6,'0')}` : '';
+      measEl.innerHTML = `
+        <span class="m-live">▸ ${formatValue(latest.y)} ${ch.units}  @${latest.x.toFixed(3)}s</span>
+        <span class="m-raw">${sv}</span>
+      `;
     }
   }
 
@@ -404,7 +832,7 @@
     receivedCount++;
     document.getElementById('receivedCount').textContent = receivedCount;
     document.getElementById('traceCount').textContent = channels.size;
-    
+
     const fp = fingerprint(data);
     if (fp) {
       if (seenFingerprints.has(fp)) return;
@@ -419,40 +847,44 @@
     const sensorTypeArray = Array.isArray(data.sensorType) ? data.sensorType : [data.sensorType];
     const primaryChannel = sensorTypeArray[0];
 
-    // Debug messages
     if (primaryChannel === 'debug' || primaryChannel === 'debugString') {
       const msg = (typeof v === 'object' && v !== null && v.string) ? v.string : JSON.stringify(v);
       log(`debug: ${msg}`);
       return;
     }
 
-    // SPI transactions - channel IS the sensorType (spiRead/spiWrite)
     if (primaryChannel === 'spiRead' || primaryChannel === 'spiWrite') {
       const key = `SPI::${data.sensorId}::${primaryChannel}`;
       const ch = getOrCreateSpiPanel(key, data, primaryChannel);
-      if (v && typeof v === 'object') {
-        appendSpiRow(ch, v);
-      }
+      if (v && typeof v === 'object') appendSpiRow(ch, v);
       return;
     }
 
-    // Structured samples (PSTAT, CHRONO A, etc.) - measurement data
     const pt = extractPoint(data);
-    if (!pt) { 
-      log(`${primaryChannel}: ${JSON.stringify(v)}`); 
-      return; 
-    }
+    if (!pt) { log(`${primaryChannel}: ${JSON.stringify(v)}`); return; }
 
-    // Create separate panel per channel + measurement type combination
     const measurementType = pt.measurementType || '';
     const key = `${primaryChannel}::${data.sensorId}::${measurementType}`;
     const ch = getOrCreateChannel(key, data, primaryChannel);
     ch.units = pt.units || ch.units;
-    ch.points.push(pt);
-    
+
+    // Insert sorted by timestamp to prevent crossing lines
+    const arr = ch.points;
+    if (arr.length === 0 || pt.x >= arr[arr.length - 1].x) {
+      arr.push(pt);
+    } else {
+      // Binary search for insertion point
+      let lo = 0, hi = arr.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (arr[mid].x < pt.x) lo = mid + 1; else hi = mid;
+      }
+      arr.splice(lo, 0, pt);
+    }
+
     const maxBuf = getWindowSize() * 10;
-    if (ch.points.length > maxBuf) ch.points.splice(0, ch.points.length - maxBuf);
-    
+    if (arr.length > maxBuf) arr.splice(0, arr.length - maxBuf);
+
     if (!ch.canvas) {
       const canvas = document.getElementById(canvasId(key));
       if (canvas) { ch.canvas = canvas; ch.ctx = canvas.getContext('2d'); }
@@ -464,6 +896,7 @@
     channels.clear();
     seenFingerprints.clear();
     receivedCount = 0;
+    colorIdx = 0;
     document.getElementById('receivedCount').textContent = 0;
     document.getElementById('traceCount').textContent = 0;
     rebuildScopeGrid();
@@ -492,7 +925,16 @@
       }
       setTimeout(() => {
         for (const ch of channels.values()) {
-          if (!ch.isSpi && !ch.canvas) { rebuildScopeGrid(); break; }
+          if (!ch.isSpi && !ch.canvas) {
+            // Attach canvas if panel exists, or append panel if missing
+            const existing = document.getElementById(canvasId(ch.key));
+            if (existing) {
+              ch.canvas = existing;
+              ch.ctx = existing.getContext('2d');
+            } else {
+              appendToGrid(ch);
+            }
+          }
         }
         for (const ch of channels.values()) { if (!ch.isSpi) drawScope(ch); }
       }, 50);
@@ -503,7 +945,7 @@
   function renderAvailableTopics(sensors) {
     const el = document.getElementById('availableTopics');
     document.getElementById('topicCount').textContent = sensors.length;
-    if (!sensors.length) { el.innerHTML = '<div style="color:#555;padding:8px">No sensors yet</div>'; return; }
+    if (!sensors.length) { el.innerHTML = '<div style="color:#333;padding:6px;font-size:0.75rem">No sensors discovered</div>'; return; }
     el.innerHTML = sensors.map(s => {
       const sub = subscriptions.has(s.topic);
       const sensorTypeDisplay = Array.isArray(s.sensorType) ? s.sensorType.join(', ') : s.sensorType;
@@ -511,19 +953,18 @@
       return `<div class="topic-item ${sub ? 'active' : ''}">
         <div class="info">
           <div class="topic">${s.topic}${sub ? ' ✓' : ''}</div>
-          <div class="details">Channels: <strong style="color:#ccc">${sensorTypeDisplay}</strong> | Bus: ${s.deviceBus} | Model: ${s.sourceModelId} | ${s.messageCount} msgs | Last: ${new Date(s.lastSeen).toLocaleTimeString()}${measurementTypes}</div>
+          <div class="details">CH: <strong style="color:#888">${sensorTypeDisplay}</strong> | Bus: ${s.deviceBus} | Model: ${s.sourceModelId} | ${s.messageCount} msgs | Last: ${new Date(s.lastSeen).toLocaleTimeString()}${measurementTypes}</div>
         </div>
         ${sub
-          ? `<button class="btn-danger btn-small" onclick="unsubscribe('${s.topic}')">Unsub</button>`
-          : `<button class="btn-success btn-small" onclick="subscribeToTopic('${s.topic}')">Sub</button>`}
+          ? `<button class="btn-disconnect btn-sm" onclick="unsubscribe('${s.topic}')">Unsub</button>`
+          : `<button class="btn-sub btn-sm" onclick="subscribeToTopic('${s.topic}')">Sub</button>`}
       </div>`;
     }).join('');
   }
 
   function renderSuggestedPatterns(patterns) {
     const el = document.getElementById('suggestedPatterns');
-    if (!patterns.length) { 
-      // Generate default patterns for all telemetry channels
+    if (!patterns.length) {
       const defaultPatterns = [
         'sensors/#',
         'sensors/+/+/fifoPop/+/#',
@@ -566,8 +1007,7 @@
       clientId = JSON.parse(e.data).clientId;
       updateStatus(true);
       log(`Connected: ${clientId}`, 'success');
-      
-      // Auto-subscribe to all telemetry channels with correct 6-segment pattern
+
       const defaultPatterns = [
         'sensors/+/+/fifoPop/+/#',
         'sensors/+/+/fifoPush/+/#',
@@ -576,7 +1016,7 @@
         'sensors/+/+/spiWrite/+/#',
         'sensors/+/+/debug/+/#'
       ];
-      
+
       let historyTotal = 0;
       Promise.all(defaultPatterns.map(pattern => {
         subscriptions.add(pattern);
@@ -589,12 +1029,12 @@
           .then(r => {
             const count = r.historyQueued || 0;
             historyTotal += count;
-            log(`Subscribed: ${pattern} (${count} msgs queued for replay)`, 'success');
+            log(`Sub: ${pattern} (${count} queued)`, 'success');
           });
       }))
         .then(() => {
           renderSubscriptions();
-          log(`✓ Total history queued: ${historyTotal} messages`, 'success');
+          log(`✓ History queued: ${historyTotal} msgs`, 'success');
           loadTopics();
         })
         .catch(e => log(`Auto-subscribe error: ${e.message}`, 'error'));
@@ -602,7 +1042,6 @@
     eventSource.addEventListener('sensor', e => {
       const data = JSON.parse(e.data);
       ingestMessage(data);
-      // Update counters in real-time
       document.getElementById('receivedCount').textContent = receivedCount;
       document.getElementById('traceCount').textContent = channels.size;
     });
@@ -628,7 +1067,7 @@
         if (res.ok) {
           subscriptions.add(topic);
           renderSubscriptions();
-          log(`✓ Subscribed: ${topic} (${r.historyQueued||0} msgs queued for replay)`, 'success');
+          log(`✓ Sub: ${topic} (${r.historyQueued||0} queued)`, 'success');
         }
       } catch (e) { log(`Subscribe error: ${e.message}`, 'error'); }
     } else {
@@ -640,23 +1079,23 @@
 
   async function unsubscribe(topic) {
     if (clientId) {
-      try { 
-        await fetch(`${getServiceUrl()}/subscribe`, { 
-          method: 'DELETE', 
-          headers: {'Content-Type':'application/json'}, 
-          body: JSON.stringify({clientId, topic}) 
+      try {
+        await fetch(`${getServiceUrl()}/subscribe`, {
+          method: 'DELETE',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({clientId, topic})
         });
       } catch (e) {}
     }
-    subscriptions.delete(topic); 
-    renderSubscriptions(); 
+    subscriptions.delete(topic);
+    renderSubscriptions();
     log(`Unsubscribed: ${topic}`);
   }
 
-  window.addEventListener('resize', () => { 
-    for (const ch of channels.values()) { 
-      if (!ch.isSpi) drawScope(ch); 
-    } 
+  window.addEventListener('resize', () => {
+    for (const ch of channels.values()) {
+      if (!ch.isSpi) drawScope(ch);
+    }
   });
 </script>
 </body>

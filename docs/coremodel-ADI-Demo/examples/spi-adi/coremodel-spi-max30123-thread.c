@@ -14,7 +14,7 @@
 
 /* should thread_telemetry* printf for this channel? */
 static const int channel_debug[] = {
-    0, 0, 1, 0, 1, 1
+    0, 0, 0, 1, 1, 1
 };
 static const char *telemetry_channel_names[] = {
     "debugString",
@@ -123,12 +123,12 @@ static void thread_telemetry_spi(max30123_state_t *state) {
     int pos = 0;
     unsigned int i;
 
-    for (i = 0; i < state->spi_buffer[rd_ptr][2]; i++)
+    for (i = 0; i < state->spi_buffer[rd_ptr][2]; i++){
         pos += snprintf(bytes_buf + pos, 
                         sizeof(bytes_buf) - pos,
                         "%s\"%02x\"", (i > 0 ? "," : ""),
                         (int)state->spi_buffer[rd_ptr][3+i]);
-
+        }
     snprintf(buffer, sizeof(buffer),
         "\"sensorType\":\"%s\",\"value\":{"
         "\"type\":\"SPI\","

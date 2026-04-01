@@ -65,7 +65,7 @@ typedef struct max30123_state {
     /* Telemetry */
     coremodel_telemetry_t *telemetry;
     int telemetry_enabled;
-    uint32_t spi_buffer[FIFO_LEN][16];
+    uint8_t spi_buffer[FIFO_LEN][16];
     uint32_t spi_buffer_write;
     uint32_t spi_buffer_read;
     unsigned report_pointer;
