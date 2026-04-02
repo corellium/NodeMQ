@@ -4,9 +4,11 @@
 
 DATA_DIR="/opt/sensor-service/data"
 
+echo "$(date): cleanup-sensor-data.sh triggered" | tee -a /var/log/sensor-cleanup.log
+
 if [ -d "$DATA_DIR" ]; then
     rm -rf "${DATA_DIR:?}"/*
-    echo "Sensor service data cleaned: $DATA_DIR"
+    echo "$(date): Sensor service data cleaned: $DATA_DIR" | tee -a /var/log/sensor-cleanup.log
 else
-    echo "Data directory not found: $DATA_DIR"
+    echo "$(date): Data directory not found: $DATA_DIR" | tee -a /var/log/sensor-cleanup.log
 fi

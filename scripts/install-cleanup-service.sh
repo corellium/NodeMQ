@@ -1,6 +1,10 @@
 #!/bin/bash
 # Installs the sensor-data-cleanup systemd service on Ubuntu 24.04
 # Run with: sudo bash install-cleanup-service.sh
+#
+# Strategy: The service starts at boot (does nothing) and stays "active".
+# At shutdown, systemd stops it, which triggers ExecStop to clean the data.
+# This is the reliable pattern for shutdown-time scripts in systemd.
 
 set -e
 
@@ -12,26 +16,27 @@ SERVICE_FILE="/etc/systemd/system/sensor-data-cleanup.service"
 cp "$SCRIPT_DIR/cleanup-sensor-data.sh" "$CLEANUP_SCRIPT"
 chmod +x "$CLEANUP_SCRIPT"
 
-# Create systemd service that runs the cleanup script AT shutdown
-# Uses ExecStart bound to shutdown/reboot targets so it reliably fires
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Clean sensor-service telemetry data on shutdown
-DefaultDependencies=no
-Before=umount.target
-After=final.target
+After=local-fs.target
+Before=sensor-service.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/cleanup-sensor-data.sh
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/cleanup-sensor-data.sh
 
 [Install]
-WantedBy=reboot.target halt.target poweroff.target
+WantedBy=multi-user.target
 EOF
 
-# Enable the service (no need to start — it only runs at shutdown)
+# Enable and start the service so it's "active" and can be stopped at shutdown
 systemctl daemon-reload
 systemctl enable sensor-data-cleanup.service
+systemctl start sensor-data-cleanup.service
 
 echo "sensor-data-cleanup service installed and enabled."
-echo "It will run cleanup-sensor-data.sh on every shutdown/reboot."
+echo "Verify it is active: systemctl status sensor-data-cleanup"
+echo "It will clean /opt/sensor-service/data/ at shutdown."
