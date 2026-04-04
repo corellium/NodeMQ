@@ -16,7 +16,7 @@ import { IngestedMessage } from '../types/ingested-message.js';
 import { pino } from 'pino';
 
 const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || 'warn',
 });
 
 export interface PersistResult {
@@ -95,6 +95,25 @@ export class MessagePersistence {
   async persist(message: IngestedMessage): Promise<PersistResult> {
     try {
       await this.messageLog.append(message, 'pending');
+      return {
+        success: true,
+        messageId: message.messageId,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Persists a message directly as completed.
+   * Used when the message has already been broadcast — skips the pending→completed cycle.
+   */
+  async persistCompleted(message: IngestedMessage): Promise<PersistResult> {
+    try {
+      await this.messageLog.append(message, 'completed');
       return {
         success: true,
         messageId: message.messageId,

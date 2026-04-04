@@ -21,7 +21,7 @@ import { IngestedMessage } from '../types/ingested-message.js';
 import { pino } from 'pino';
 
 const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || 'warn',
 });
 
 // Configuration constants
@@ -214,8 +214,8 @@ export class MessageLog {
 
   /**
    * Appends a message to the log (immediate write).
-   * Thread-safe - can be called from multiple workers.
-   * NO BATCHING - writes immediately for consistency with status updates.
+   * Thread-safe - can be called from the I/O worker.
+   * Uses direct write since this runs in a background worker, not the critical path.
    */
   async append(message: IngestedMessage, status: 'pending' | 'completed' | 'failed' = 'pending'): Promise<void> {
     if (this.isClosed) {
@@ -230,7 +230,6 @@ export class MessageLog {
       data: message,
     };
 
-    // Write immediately - no batching to avoid race conditions
     await this.writeEntryDirect(entry);
   }
 

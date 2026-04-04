@@ -72,7 +72,8 @@ export class SensorSubscriptionService {
 
   // FIFO message queues - embedded-style bounded buffers
   private ingestionFifo: MessageFIFO<IngestedMessage>;
-  private processingFifo: MessageFIFO<IngestedMessage>;
+  private priorityIngestionFifo: MessageFIFO<IngestedMessage>;
+  private processingShards: MessageFIFO<IngestedMessage>[] = [];
   private fifoWorkerRunning: boolean = false;
 
   // Parallel processor for concurrent message processing
@@ -82,8 +83,14 @@ export class SensorSubscriptionService {
   // Per-topic ring buffer for replay to new subscribers
   private topicBuffer: TopicMessageBuffer;
 
-  // I/O task queue for Worker 1
+  // I/O task queue for Worker 1 (serve-history only — no persist tasks)
   private ioTaskQueue: IOTaskQueue;
+
+  // Background persistence buffer — decoupled from message flow
+  private persistBuffer: IngestedMessage[] = [];
+  private persistFlushTimer: NodeJS.Timeout | null = null;
+  private readonly PERSIST_FLUSH_INTERVAL_MS = 5000;
+  private readonly PERSIST_FLUSH_BATCH_SIZE = 500;
 
   constructor(configPath: string = './config.json', port: number = 3000) {
     this.port = port;
@@ -91,7 +98,8 @@ export class SensorSubscriptionService {
 
     // Initialize FIFO queues with fixed capacity
     this.ingestionFifo = new MessageFIFO<IngestedMessage>('ingestion', DEFAULT_INGESTION_FIFO_SIZE, 'discard-oldest');
-    this.processingFifo = new MessageFIFO<IngestedMessage>('processing', DEFAULT_PROCESSING_FIFO_SIZE, 'discard-oldest');
+    this.priorityIngestionFifo = new MessageFIFO<IngestedMessage>('ingestion-priority', DEFAULT_INGESTION_FIFO_SIZE, 'discard-oldest');
+    this.processingShards = this.createProcessingShards(DEFAULT_PARALLEL_WORKERS, DEFAULT_PROCESSING_FIFO_SIZE);
 
     // Initialize components
     this.topicManager = new TopicManager();
@@ -122,6 +130,81 @@ export class SensorSubscriptionService {
   }
 
   /**
+   * Creates N processing shard FIFOs, dividing total capacity evenly.
+   */
+  private createProcessingShards(shardCount: number, totalCapacity: number): MessageFIFO<IngestedMessage>[] {
+    const perShard = Math.max(64, Math.ceil(totalCapacity / shardCount));
+    return Array.from({ length: shardCount }, (_, i) =>
+      new MessageFIFO<IngestedMessage>(`processing-shard-${i}`, perShard, 'discard-oldest')
+    );
+  }
+
+  /**
+   * Fast deterministic hash for topic-based shard routing (djb2).
+   * Same topic always maps to the same shard, preserving per-topic ordering.
+   */
+  private hashTopic(topic: string): number {
+    let hash = 5381;
+    for (let i = 0; i < topic.length; i++) {
+      hash = ((hash << 5) + hash + topic.charCodeAt(i)) & 0x7fffffff;
+    }
+    return hash;
+  }
+
+  /**
+   * Routes a message to the correct processing shard based on its topic.
+   */
+  private routeToShard(message: IngestedMessage): boolean {
+    const shardIndex = this.hashTopic(message.topic) % this.processingShards.length;
+    return this.processingShards[shardIndex].push(message);
+  }
+
+  /**
+   * Starts the background persist flush timer.
+   */
+  private startPersistFlushTimer(): void {
+    if (this.persistFlushTimer) return;
+    this.persistFlushTimer = setInterval(() => {
+      this.flushPersistBuffer();
+    }, this.PERSIST_FLUSH_INTERVAL_MS);
+  }
+
+  /**
+   * Stops the background persist flush timer.
+   */
+  private stopPersistFlushTimer(): void {
+    if (this.persistFlushTimer) {
+      clearInterval(this.persistFlushTimer);
+      this.persistFlushTimer = null;
+    }
+  }
+
+  /**
+   * Flushes the persist buffer to disk in the background.
+   * Runs on a timer or when buffer reaches batch size.
+   * Completely decoupled from the message delivery path.
+   */
+  private flushPersistBuffer(): void {
+    if (this.persistBuffer.length === 0) return;
+
+    const batch = this.persistBuffer;
+    this.persistBuffer = [];
+
+    // Fire-and-forget — persistence runs in background, doesn't block anything
+    (async () => {
+      for (const message of batch) {
+        try {
+          await this.messagePersistence.persistCompleted(message);
+        } catch (error) {
+          logger.error({ messageId: message.messageId, error }, 'Background persist failed');
+        }
+      }
+    })().catch(error => {
+      logger.error({ error }, 'Persist buffer flush failed');
+    });
+  }
+
+  /**
    * Starts the FIFO worker loops for message processing.
    * Two-stage pipeline: ingestion -> persistence -> processing -> delivery
    * 
@@ -131,7 +214,10 @@ export class SensorSubscriptionService {
     if (this.fifoWorkerRunning) return;
     this.fifoWorkerRunning = true;
 
-    // Stage 1: Ingestion worker - persists messages then moves to processing queue
+    // Start background persist flush timer
+    this.startPersistFlushTimer();
+
+    // Stage 1: Ingestion worker - routes messages to shards
     this.runIngestionWorker();
 
     // Stage 2: Processing - either parallel (concurrent loops) or single-threaded
@@ -143,33 +229,50 @@ export class SensorSubscriptionService {
 
     logger.info({
       ingestionCapacity: this.ingestionFifo.getCapacity(),
-      processingCapacity: this.processingFifo.getCapacity(),
+      priorityIngestionCapacity: this.priorityIngestionFifo.getCapacity(),
+      processingShards: this.processingShards.length,
+      perShardCapacity: this.processingShards[0]?.getCapacity() ?? 0,
       parallelProcessing: this.useParallelProcessing,
     }, 'FIFO workers started');
   }
 
   /**
-   * Ingestion worker loop - pulls from ingestion FIFO, persists, then pushes to processing FIFO.
-   * Persistence is re-enabled - Worker 1 will handle the actual I/O writes.
+   * Ingestion worker loop - drains priority FIFO first (spiRead/spiWrite),
+   * then normal FIFO. Routes to processing shards immediately.
+   * Persistence is handled asynchronously by the dedicated I/O worker.
    */
   private async runIngestionWorker(): Promise<void> {
     let idleMs = FIFO_POLL_MIN_MS;
+    let processedSinceYield = 0;
     while (this.fifoWorkerRunning) {
-      const message = this.ingestionFifo.pop();
+      // Always drain priority FIFO first — SPI messages jump the queue
+      const message = this.priorityIngestionFifo.pop() ?? this.ingestionFifo.pop();
       
       if (message) {
         idleMs = FIFO_POLL_MIN_MS; // reset backoff on activity
         
-        // Persist message (Worker 1 will handle the actual I/O)
-        await this.messagePersistence.persist(message);
+        // Route to processing shard immediately — zero blocking
+        const pushed = this.routeToShard(message);
+        if (!pushed) {
+          logger.warn({ messageId: message.messageId }, 'Processing shard full, message dropped');
+        }
+        
+        // Buffer for background persistence (flushed on timer, not in I/O worker)
+        this.persistBuffer.push(message);
+        if (this.persistBuffer.length >= this.PERSIST_FLUSH_BATCH_SIZE) {
+          this.flushPersistBuffer();
+        }
+        
         this.eventHub.emit('message:persisted', message);
         
-        // Push to processing queue for broadcast
-        const pushed = this.processingFifo.push(message);
-        if (!pushed) {
-          logger.warn({ messageId: message.messageId }, 'Processing FIFO full, message dropped');
+        // Yield to event loop every 64 messages so broadcast consumers can deliver to UI
+        processedSinceYield++;
+        if (processedSinceYield >= 64) {
+          processedSinceYield = 0;
+          await new Promise(resolve => setImmediate(resolve));
         }
       } else {
+        processedSinceYield = 0;
         // Adaptive backoff: ramp up idle sleep to reduce CPU burn when quiet
         await new Promise(resolve => setTimeout(resolve, idleMs));
         if (idleMs < FIFO_POLL_MAX_MS) idleMs = Math.min(idleMs * 2, FIFO_POLL_MAX_MS);
@@ -178,101 +281,84 @@ export class SensorSubscriptionService {
   }
 
   /**
-   * Starts parallel processing using concurrent async loops with specialized worker roles.
-   * Worker 0: Handles message broadcasting (SSE delivery) - pulls from processing FIFO
-   * Worker 1: Handles I/O operations (persistence, historical data) - pulls from I/O task queue
+   * Starts parallel processing using sharded FIFO queues.
+   * Each broadcast consumer owns a dedicated shard — zero contention.
+   * A dedicated I/O worker handles persistence and history serving.
    */
   private async startParallelProcessing(): Promise<void> {
     const config = this.configManager.getConfig();
-    const workerCount = config.parallelWorkers ?? DEFAULT_PARALLEL_WORKERS;
+    const broadcastWorkers = config.parallelWorkers ?? DEFAULT_PARALLEL_WORKERS;
 
-    if (workerCount !== 2) {
-      logger.warn({ workerCount }, 'Two-worker architecture requires parallelWorkers=2, adjusting');
-    }
-
-    // Create message processor function with worker role specialization
+    // Create message processor function — all broadcast workers use the same logic
     const messageProcessor = async (message: IngestedMessage, workerId: number) => {
       const startTime = Date.now();
       
-      // Worker 0: Broadcast messages to SSE clients (fast path)
-      if (workerId === 0) {
-        try {
-          // Register sensor in topic registry for discovery
-          // Extract deviceBus from the topic that was already built (3rd segment)
-          const topicParts = message.topic.split('/');
-          const deviceBus = topicParts[2] || 'unknown';
-          
-          this.topicRegistry.register(
-            message.topic,
-            message.data.sensorId,
-            message.data.sensorType,
-            message.data.sourceModelId,
-            deviceBus,
-            message.data
-          );
+      try {
+        // Register sensor in topic registry for discovery
+        const deviceBus = message.data.deviceBus || 'unknown';
+        
+        this.topicRegistry.register(
+          message.topic,
+          message.data.sensorId,
+          message.data.sensorType,
+          message.data.sourceModelId,
+          deviceBus,
+          message.data
+        );
 
-          // Buffer message for replay to future subscribers
-          logger.warn({ topic: message.topic, messageId: message.messageId }, 'Worker 0: Pushing message to topic buffer');
-          this.topicBuffer.push(message.topic, message.data);
+        // Buffer message for replay to future subscribers
+        this.topicBuffer.push(message.topic, message.data);
 
-          // Broadcast to SSE subscribers
-          const deliveredTo = this.sseManager.broadcast(
-            message.topic,
-            message.data,
-            message.messageId
-          );
+        // Broadcast to SSE subscribers
+        const deliveredTo = this.sseManager.broadcast(
+          message.topic,
+          message.data,
+          message.messageId
+        );
 
-          // Queue I/O task for Worker 1 to mark as completed
-          this.ioTaskQueue.push({
-            type: 'mark-completed',
-            messageId: message.messageId,
-            timestamp: Date.now(),
-          });
+        this.healthMonitor.recordMessage(true, Date.now() - startTime);
+        this.eventHub.emit('message:routed', message);
 
-          this.healthMonitor.recordMessage(true, Date.now() - startTime);
-          this.eventHub.emit('message:routed', message);
-
-          if (deliveredTo.length > 0) {
-            this.eventHub.emit('message:delivered', message, deliveredTo);
-          }
-
-          return { success: true, deliveredTo };
-        } catch (error) {
-          logger.error({ messageId: message.messageId, error, workerId }, 'Worker 0 broadcast error');
-          this.healthMonitor.recordMessage(false, Date.now() - startTime);
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          };
+        if (deliveredTo.length > 0) {
+          this.eventHub.emit('message:delivered', message, deliveredTo);
         }
+
+        return { success: true, deliveredTo };
+      } catch (error) {
+        logger.error({ messageId: message.messageId, error, workerId }, 'Broadcast worker error');
+        this.healthMonitor.recordMessage(false, Date.now() - startTime);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
       }
-      
-      // Worker 1: This shouldn't be called with messages, only I/O tasks
-      return { success: true };
     };
 
     this.parallelProcessor = new ParallelProcessor(
-      this.processingFifo,
+      this.processingShards,
       messageProcessor,
-      2, // Force 2 workers for specialized roles
-      this.ioTaskQueue, // Pass I/O task queue for Worker 1
-      this.messagePersistence, // Pass persistence for Worker 1
-      this.sseManager, // Pass SSE manager for Worker 1 history serving
-      this.topicBuffer // Pass topic buffer for Worker 1 history serving
+      this.ioTaskQueue,
+      this.messagePersistence,
+      this.sseManager,
+      this.topicBuffer
     );
 
     await this.parallelProcessor.initialize();
     this.parallelProcessor.start();
 
-    logger.info('Two-worker parallel processing started: Worker 0 (broadcast), Worker 1 (I/O)');
+    logger.info({
+      broadcastWorkers,
+      shards: this.processingShards.length,
+    }, 'Sharded parallel processing started');
   }
 
   /**
-   * Processing worker loop - pulls from processing FIFO, broadcasts to SSE.
+   * Processing worker loop (single-threaded fallback) - pulls from shard 0, broadcasts to SSE.
    */
   private async runProcessingWorker(): Promise<void> {
+    const shard = this.processingShards[0];
     while (this.fifoWorkerRunning) {
-      const message = this.processingFifo.pop();
+      const message = shard.pop();
       
       if (message) {
         const startTime = Date.now();
@@ -328,6 +414,10 @@ export class SensorSubscriptionService {
   private async stopFifoWorkers(): Promise<void> {
     this.fifoWorkerRunning = false;
 
+    // Stop persist flush timer and flush remaining buffer
+    this.stopPersistFlushTimer();
+    this.flushPersistBuffer();
+
     // Stop parallel processor if running
     if (this.parallelProcessor) {
       await this.parallelProcessor.stop();
@@ -340,10 +430,22 @@ export class SensorSubscriptionService {
   /**
    * Gets FIFO statistics for monitoring.
    */
-  getFifoStats(): { ingestion: FIFOStats; processing: FIFOStats } {
+  getFifoStats(): { ingestion: FIFOStats; priorityIngestion: FIFOStats; processing: FIFOStats; shards: FIFOStats[] } {
+    const shardStats = this.processingShards.map(s => s.getStats());
+    const aggregated: FIFOStats = {
+      capacity: shardStats.reduce((sum, s) => sum + s.capacity, 0),
+      count: shardStats.reduce((sum, s) => sum + s.count, 0),
+      head: 0,
+      tail: 0,
+      overflowCount: shardStats.reduce((sum, s) => sum + s.overflowCount, 0),
+      isFull: shardStats.every(s => s.isFull),
+      isEmpty: shardStats.every(s => s.isEmpty),
+    };
     return {
       ingestion: this.ingestionFifo.getStats(),
-      processing: this.processingFifo.getStats(),
+      priorityIngestion: this.priorityIngestionFifo.getStats(),
+      processing: aggregated,
+      shards: shardStats,
     };
   }
 
@@ -384,16 +486,22 @@ export class SensorSubscriptionService {
         configResult.config.ingestionFifoSize,
         'discard-oldest'
       );
-      this.processingFifo = new MessageFIFO<IngestedMessage>(
-        'processing',
-        configResult.config.processingFifoSize,
+      this.priorityIngestionFifo = new MessageFIFO<IngestedMessage>(
+        'ingestion-priority',
+        configResult.config.ingestionFifoSize,
         'discard-oldest'
+      );
+      this.processingShards = this.createProcessingShards(
+        configResult.config.parallelWorkers,
+        configResult.config.processingFifoSize
       );
 
       logger.info({
         ingestionFifoSize: configResult.config.ingestionFifoSize,
         processingFifoSize: configResult.config.processingFifoSize,
         parallelWorkers: configResult.config.parallelWorkers,
+        shardsCreated: this.processingShards.length,
+        perShardCapacity: this.processingShards[0]?.getCapacity() ?? 0,
       }, 'FIFO queues configured');
     } else {
       logger.warn({ error: configResult.error }, 'Using default configuration');
@@ -434,8 +542,8 @@ export class SensorSubscriptionService {
       logger.info({ sourceModelId, count: messages.length }, 'Recovering pending messages');
 
       for (const persistedMessage of messages) {
-        // Push to processing FIFO (already persisted)
-        this.processingFifo.push(persistedMessage.data);
+        // Route to correct shard based on topic hash (same as live ingestion)
+        this.routeToShard(persistedMessage.data);
       }
     }
   }
@@ -514,8 +622,11 @@ export class SensorSubscriptionService {
         return;
       }
 
-      // Push to ingestion FIFO (bounded queue)
-      const pushed = this.ingestionFifo.push(result.message!);
+      // Route SPI messages to priority FIFO, everything else to normal FIFO
+      const sensorType = result.message!.data.sensorType;
+      const isPriority = sensorType === 'spiRead' || sensorType === 'spiWrite';
+      const targetFifo = isPriority ? this.priorityIngestionFifo : this.ingestionFifo;
+      const pushed = targetFifo.push(result.message!);
       
       if (!pushed) {
         // FIFO full and policy is reject-new
@@ -614,17 +725,8 @@ export class SensorSubscriptionService {
       }
 
       // Queue I/O task for Worker 1 to serve historical data
-      const allTopics = this.topicBuffer.getTopics();
       const historyMessages = this.topicBuffer.getForPattern(body.topic);
       const historyCount = historyMessages.length;
-      logger.warn({ 
-        clientId: body.clientId, 
-        topic: body.topic, 
-        historyCount,
-        totalTopicsInBuffer: allTopics.length,
-        sampleTopics: allTopics.slice(0, 5),
-        queueing: historyCount > 0
-      }, 'POST /subscribe: Queueing history task');
       
       if (historyCount > 0) {
         this.ioTaskQueue.push({
@@ -725,12 +827,28 @@ export class SensorSubscriptionService {
           overflowCount: fifoStats.ingestion.overflowCount,
           fillPercent: Math.round((fifoStats.ingestion.count / fifoStats.ingestion.capacity) * 100),
         },
+        priorityIngestion: {
+          count: fifoStats.priorityIngestion.count,
+          capacity: fifoStats.priorityIngestion.capacity,
+          overflowCount: fifoStats.priorityIngestion.overflowCount,
+          fillPercent: Math.round((fifoStats.priorityIngestion.count / fifoStats.priorityIngestion.capacity) * 100),
+        },
         processing: {
           count: fifoStats.processing.count,
           capacity: fifoStats.processing.capacity,
           overflowCount: fifoStats.processing.overflowCount,
-          fillPercent: Math.round((fifoStats.processing.count / fifoStats.processing.capacity) * 100),
+          fillPercent: fifoStats.processing.capacity > 0
+            ? Math.round((fifoStats.processing.count / fifoStats.processing.capacity) * 100)
+            : 0,
+          shardCount: fifoStats.shards.length,
         },
+        shards: fifoStats.shards.map((s, i) => ({
+          shard: i,
+          count: s.count,
+          capacity: s.capacity,
+          overflowCount: s.overflowCount,
+          fillPercent: Math.round((s.count / s.capacity) * 100),
+        })),
       },
       // I/O task queue metrics - Worker 1 task queue
       ioTaskQueue: {
@@ -895,7 +1013,7 @@ export class SensorSubscriptionService {
 
     logger.info('Stopping Sensor Subscription Service...');
 
-    // Stop FIFO workers
+    // Stop FIFO workers (stops ingestion worker, broadcast consumers, and flushes persist buffer)
     await this.stopFifoWorkers();
 
     // Stop heartbeat
@@ -912,8 +1030,11 @@ export class SensorSubscriptionService {
     const fifoStats = this.getFifoStats();
     logger.info({
       ingestionRemaining: fifoStats.ingestion.count,
+      priorityIngestionRemaining: fifoStats.priorityIngestion.count,
       processingRemaining: fifoStats.processing.count,
+      processingShards: fifoStats.shards.length,
       ingestionOverflows: fifoStats.ingestion.overflowCount,
+      priorityIngestionOverflows: fifoStats.priorityIngestion.overflowCount,
       processingOverflows: fifoStats.processing.overflowCount,
     }, 'Final FIFO statistics');
 

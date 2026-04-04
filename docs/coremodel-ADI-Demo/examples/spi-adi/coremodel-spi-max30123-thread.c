@@ -14,7 +14,7 @@
 
 /* should thread_telemetry* printf for this channel? */
 static const int channel_debug[] = {
-    0, 0, 0, 1, 1, 1
+    0, 1, 1, 1, 1, 1
 };
 static const char *telemetry_channel_names[] = {
     "debugString",

@@ -88,18 +88,12 @@ export class TopicMessageBuffer<T = unknown> {
    */
   getForPattern(pattern: string): T[] {
     const result: T[] = [];
-    const allTopics = Array.from(this.buffers.keys());
-    logger.warn({ pattern, topicCount: allTopics.length, topics: allTopics }, 'TopicMessageBuffer.getForPattern called');
     
     for (const [topic, buf] of this.buffers) {
-      const matches = this.topicManager.matchTopic(pattern, topic);
-      const msgCount = buf.toArray().length;
-      logger.warn({ topic, matches, msgCount }, 'TopicMessageBuffer.getForPattern checking topic');
-      if (matches) {
+      if (this.topicManager.matchTopic(pattern, topic)) {
         result.push(...buf.toArray());
       }
     }
-    logger.warn({ resultCount: result.length }, 'TopicMessageBuffer.getForPattern returning');
     return result;
   }
 
